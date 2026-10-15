@@ -1,3 +1,7 @@
+import {
+  canProbeInitialPluginPanel,
+  openInitialPluginWorkspacePanel
+} from '@/components/plugin-workspace/initial-plugin-workspace-panel'
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
@@ -74,7 +78,8 @@ export function ensureWorktreeHasInitialTerminal(
   setup?: WorktreeSetupLaunch,
   issueCommand?: IssueCommandLaunch,
   defaultTabs?: WorktreeDefaultTabsLaunch,
-  opts?: InitialTerminalOptions
+  opts?: InitialTerminalOptions,
+  pluginSurfaceChecked = false
 ): string | null {
   const { renderableTabCount } = store.reconcileWorktreeTabModel(worktreeId)
   // Why: creating a terminal just because the legacy terminal slice is empty gives editor/browser-only worktrees an unexpected extra tab.
@@ -203,6 +208,31 @@ export function ensureWorktreeHasInitialTerminal(
       )
       return existingTerminalTabId
     }
+    return null
+  }
+
+  // A plugin may provide the initial surface; explicit launch commands still own their terminal.
+  if (
+    !pluginSurfaceChecked &&
+    !hasExplicitLaunchWork &&
+    !defaultTabs?.tabs.length &&
+    shouldAutoCreate &&
+    canProbeInitialPluginPanel(worktreeId)
+  ) {
+    void openInitialPluginWorkspacePanel(worktreeId).then((opened) => {
+      if (!opened && useAppStore.getState().activeWorktreeId === worktreeId) {
+        ensureWorktreeHasInitialTerminal(
+          useAppStore.getState(),
+          worktreeId,
+          startup,
+          setup,
+          issueCommand,
+          defaultTabs,
+          opts,
+          true
+        )
+      }
+    })
     return null
   }
 

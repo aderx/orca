@@ -1,3 +1,4 @@
+import { WorkspacePluginTabIcon } from '../plugin-workspace/WorkspacePluginTabIcon'
 import { createElement, useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks, ChartColumn } from 'lucide-react'
@@ -285,6 +286,11 @@ export default function EditorFileTab({
       ) : isMarkdownPreviewTab ? (
         <Eye
           className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
+        />
+      ) : file.mode === 'plugin-panel' ? (
+        <WorkspacePluginTabIcon
+          tabKey={file.pluginPanel?.tabKey}
+          className="w-3 h-3 mr-1 shrink-0 text-current"
         />
       ) : (
         createElement(HoverIcon, {

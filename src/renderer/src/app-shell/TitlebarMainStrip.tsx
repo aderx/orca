@@ -7,6 +7,7 @@ import { useShortcutLabel } from '../hooks/useShortcutLabel'
 import { useAppStore } from '../store'
 import { hasCustomTitleBar } from './app-window-chrome'
 import type { AppChromeLayout } from './use-app-chrome-layout'
+import { WorkspacePluginToolbar } from '../components/plugin-workspace/WorkspacePluginToolbar'
 
 export function RightSidebarToggle(): React.JSX.Element {
   const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar)
@@ -54,6 +55,7 @@ export function TitlebarMainStrip({ layout }: { layout: AppChromeLayout }): Reac
           className={`flex flex-1 min-w-0 self-stretch${!layout.workspaceChromeActive ? ' invisible pointer-events-none' : ''}`}
         />
       )}
+      {layout.activeView === 'terminal' && !layout.creationLayoutActive && <WorkspacePluginToolbar />}
       {layout.showTitlebarExpandButton && (
         <Tooltip>
           <TooltipTrigger asChild>

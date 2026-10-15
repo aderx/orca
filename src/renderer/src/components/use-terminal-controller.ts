@@ -1,3 +1,4 @@
+import { usePluginWorkspacePanels } from './plugin-workspace/use-plugin-workspace-panels'
 import { useTerminalWorkspaceFoundation } from './use-terminal-workspace-foundation'
 import { useTerminalWorkspaceStoreBindings } from './use-terminal-workspace-store-bindings'
 import { useTerminalWorkspaceProjection } from './use-terminal-workspace-projection'
@@ -18,6 +19,7 @@ import { useTerminalKeyboardShortcuts } from './use-terminal-keyboard-shortcuts'
 import { useTerminalWindowLifecycle } from './use-terminal-window-lifecycle'
 
 export function useTerminalController() {
+  usePluginWorkspacePanels()
   const foundation = useTerminalWorkspaceFoundation()
   const store = Object.assign(foundation, useTerminalWorkspaceStoreBindings(foundation))
   const projection = Object.assign(store, useTerminalWorkspaceProjection(store))

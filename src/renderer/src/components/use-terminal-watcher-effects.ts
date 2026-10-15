@@ -1,3 +1,4 @@
+import { openInitialPluginWorkspacePanel } from './plugin-workspace/initial-plugin-workspace-panel'
 import { useEffect, useMemo, useRef } from 'react'
 import { findActivityTerminalPortal } from './activity/activity-terminal-portal'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
@@ -215,7 +216,7 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
       return
     }
     let cancelled = false
-    void gateWorktreeAgentActivation(activeWorktreeId).then((outcome) => {
+    void gateWorktreeAgentActivation(activeWorktreeId).then(async (outcome) => {
       if (
         cancelled ||
         outcome === 'blocked' ||
@@ -238,6 +239,8 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
       if (hasStructuredAgentLaunchInWorktree(activeWorktreeId)) {
         return
       }
+      if (await openInitialPluginWorkspacePanel(activeWorktreeId)) return
+      if (cancelled || useAppStore.getState().activeWorktreeId !== activeWorktreeId) return
       // Why: the activation gate reconciles durable/live agent state first; only an actually empty, never-visited workspace receives a default shell.
       const { renderableTabCount } = reconcileWorktreeTabModel(activeWorktreeId)
       // Why (main): only a workspace emptied by a recorded close stays empty; an empty row with no

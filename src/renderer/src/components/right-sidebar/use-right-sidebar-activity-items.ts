@@ -1,3 +1,4 @@
+import { workspacePluginPanelKeys } from '../plugin-workspace/workspace-plugin-panels'
 import { useMemo } from 'react'
 import { Plug, Files, GitBranch, ListChecks, Workflow } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -58,16 +59,28 @@ export function useRightSidebarActivityItems({
   )
   const pluginSystemEnabled = useAppStore((s) => s.settings?.pluginSystemEnabled === true)
   const pluginPanels = usePluginPanels()
-  const visiblePluginPanels = useMemo(
-    () => (pluginSystemEnabled ? pluginPanels : []),
-    [pluginPanels, pluginSystemEnabled]
-  )
   const installedPlugins = usePluginPanelsStore((s) => s.plugins)
+  const workspacePanelKeys = useMemo(
+    () => workspacePluginPanelKeys(installedPlugins),
+    [installedPlugins]
+  )
+  const visiblePluginPanels = useMemo(
+    () =>
+      pluginSystemEnabled
+        ? pluginPanels.filter((panel) => !workspacePanelKeys.has(panel.tabKey))
+        : [],
+    [pluginPanels, pluginSystemEnabled, workspacePanelKeys]
+  )
   const pluginFetchStatus = usePluginPanelsStore((s) => s.fetchStatus)
   const pluginPanelErrors = usePluginPanelsStore((s) => s.panelErrors)
   const installedPluginTabKeys = useMemo(
-    () => collectInstalledPluginTabKeys(installedPlugins),
-    [installedPlugins]
+    () =>
+      new Set(
+        [...collectInstalledPluginTabKeys(installedPlugins)].filter(
+          (key) => !workspacePanelKeys.has(key)
+        )
+      ),
+    [installedPlugins, workspacePanelKeys]
   )
 
   const activityItems = useMemo<ActivityBarItem[]>(

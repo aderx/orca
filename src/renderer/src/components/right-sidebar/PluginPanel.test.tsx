@@ -133,6 +133,26 @@ describe('PluginPanel', () => {
     expect(initialIframe?.getAttribute('sandbox')).toBe('allow-scripts')
   })
 
+  it('retains the iframe across visibility changes and pauses its watchdog', async () => {
+    readPanelEntryMock.mockResolvedValue({ html: '<h1>Retained plugin</h1>', sessionToken: SESSION_TOKEN })
+    await renderPanel(dashboardPanel.tabKey)
+    const frame = container.querySelector('iframe')
+    if (!frame?.contentWindow) throw new Error('Missing plugin frame')
+    const postMessage = vi.spyOn(frame.contentWindow, 'postMessage')
+    await act(async () => root.render(<PluginPanel tabKey={dashboardPanel.tabKey} isVisible={false} />))
+    expect(container.querySelector('iframe')).toBe(frame)
+    expect(postMessage).toHaveBeenLastCalledWith({ type: 'orca-panel-visibility', visible: false }, '*')
+    expect(watchdogStopMock).toHaveBeenCalledTimes(1)
+    await act(async () => root.render(<PluginPanel tabKey={dashboardPanel.tabKey} isVisible />))
+    expect(container.querySelector('iframe')).toBe(frame)
+    expect(postMessage).toHaveBeenLastCalledWith({ type: 'orca-panel-visibility', visible: true }, '*')
+    expect(watchdogStartMock).toHaveBeenCalledTimes(2)
+    expect(readPanelEntryMock).toHaveBeenCalledTimes(1)
+    await act(async () => root.render(null))
+    expect(container.querySelector('iframe')).toBeNull()
+    expect(watchdogStopMock).toHaveBeenCalledTimes(2)
+  })
+
   it('restarts the watchdog after a dev reload replaces the panel document', async () => {
     readPanelEntryMock.mockResolvedValue({
       html: '<h1>Hello plugin</h1>',

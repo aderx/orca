@@ -1,0 +1,1639 @@
+<style>
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    height: 100vh;
+    overflow: hidden;
+    background: var(--background);
+    color: var(--foreground);
+    font:
+      13px Geist,
+      sans-serif;
+    letter-spacing: 0.01em;
+  }
+  main {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px;
+  }
+  h1 {
+    font-size: 18px;
+    margin: 0;
+  }
+  h2 {
+    font-size: 16px;
+    margin: 0;
+  }
+  h3 {
+    font-size: 13px;
+    margin: 16px 0 8px;
+  }
+  .muted {
+    color: var(--muted-foreground);
+  }
+  .path {
+    font: 12px var(--font-mono, monospace);
+    overflow-wrap: anywhere;
+  }
+  .toolbar,
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .toolbar {
+    justify-content: space-between;
+  }
+  .panels {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+    gap: 16px;
+    flex: 1;
+    min-height: 0;
+  }
+  .section {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+    overflow: hidden;
+  }
+  .section > :not(.servers):not(.module-browser) {
+    flex-shrink: 0;
+  }
+  #worktree {
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .module-browser {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .alphabet {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    flex-shrink: 0;
+    gap: 2px;
+    scrollbar-width: thin;
+  }
+  .alphabet button {
+    padding: 1px 5px;
+    min-width: 24px;
+    font-size: 11px;
+    border-color: transparent;
+  }
+  .alphabet button[aria-pressed='true'] {
+    background: var(--accent);
+  }
+  .service-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 100px;
+  }
+  .service-toggle .loading {
+    animation: service-spin 1s linear infinite;
+  }
+  .service-toggle .service-stop-icon,
+  .service-toggle .service-stop-label { display: none; }
+  .service-toggle[data-can-stop='true']:not(:disabled):is(:hover, :focus-visible) .service-state-icon,
+  .service-toggle[data-can-stop='true']:not(:disabled):is(:hover, :focus-visible) .service-state-label { display: none; }
+  .service-toggle[data-can-stop='true']:not(:disabled):is(:hover, :focus-visible) .service-stop-icon { display: block; }
+  .service-toggle[data-can-stop='true']:not(:disabled):is(:hover, :focus-visible) .service-stop-label { display: inline; }
+  @keyframes service-spin {
+    to { transform: rotate(360deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .service-toggle .loading { animation: none; }
+  }
+  button svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+  }
+  .module-group {
+    margin: 0;
+    padding: 8px;
+    background: var(--muted);
+    color: var(--muted-foreground);
+  }
+  .module-browser .modules {
+    margin: 0;
+  }
+  .modules.empty,
+  .servers.empty {
+    display: grid;
+    place-items: center;
+  }
+  .module-message {
+    margin: 0;
+    padding: 24px;
+    text-align: center;
+    overflow-wrap: anywhere;
+    max-width: 100%;
+  }
+  .server-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .server-empty p { margin: 0; }
+  .alphabet:empty {
+    display: none;
+  }
+  .module-details {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+  .product-controls {
+    flex-wrap: nowrap;
+  }
+  .product-controls .search-field {
+    flex: 1;
+  }
+  .search-field {
+    position: relative;
+    min-width: 0;
+    height: 32px;
+  }
+  .search-field input {
+    width: 100%;
+    height: 100%;
+    padding-right: 32px;
+  }
+  .search-clear {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 24px;
+    height: 24px;
+    padding: 4px;
+    border: 0;
+    background: transparent;
+    color: var(--muted-foreground);
+  }
+  .search-clear svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  #product {
+    width: 190px;
+    max-width: 40%;
+    min-width: 0;
+    height: 32px;
+  }
+  .icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    padding: 7px;
+  }
+  .info {
+    max-height: 64px;
+    overflow: auto;
+  }
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md, 6px);
+    background: var(--background);
+    color: var(--foreground);
+    padding: 7px 10px;
+  }
+  button {
+    cursor: pointer;
+  }
+  button:hover {
+    background: var(--accent);
+  }
+  button.primary {
+    background: var(--primary);
+    color: var(--primary-foreground);
+    border-color: var(--primary);
+  }
+  button.quiet,
+  button.danger-ghost {
+    border-color: transparent;
+    background: transparent;
+  }
+  button.danger-ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--destructive);
+  }
+  .danger-ghost svg {
+    width: 16px;
+    height: 16px;
+  }
+  button.quiet:hover,
+  button.danger-ghost:hover {
+    background: var(--accent);
+  }
+  button.destructive {
+    color: var(--destructive-foreground);
+    background: var(--destructive);
+    border-color: var(--destructive);
+  }
+  button[hidden] {
+    display: none;
+  }
+  #deleteConfirmation {
+    max-width: 360px;
+  }
+  button:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  button:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  input[type='checkbox'],
+  input[type='radio'] {
+    accent-color: var(--primary);
+  }
+  .advanced-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    align-self: flex-start;
+    height: 32px;
+    padding: 0 4px;
+    font-size: 12px;
+    color: var(--muted-foreground);
+  }
+  .advanced-toggle svg { width: 14px; height: 14px; }
+  .advanced-settings { margin-top: 12px; min-height: 0; }
+  .advanced-settings[hidden] { display: none; }
+  .advanced-fields { max-height: 200px; overflow-y: auto; scrollbar-width: thin; padding: 2px 4px 2px 2px; }
+  .environment-group + .environment-group { margin-top: 16px; }
+  .environment-group h3 { margin: 0 0 8px; font-size: 12px; }
+  .environment-description { margin: 0 0 8px; font-size: 12px; color: var(--muted-foreground); white-space: pre-line; overflow-wrap: anywhere; }
+  .environment-field { display: grid; grid-template-columns: minmax(0, 44%) minmax(0, 1fr); align-items: center; gap: 8px; margin-top: 8px; }
+  .environment-key { font: 11px var(--font-mono, monospace); overflow-wrap: anywhere; }
+  .environment-field input, .environment-field textarea { width: 100%; min-width: 0; font-size: 12px; padding: 6px 8px; }
+  .environment-field input { height: 32px; }
+  .environment-field .search-field input { padding-right: 32px; }
+  .environment-field textarea { height: 64px; resize: vertical; }
+  .environment-field + .environment-description { margin-top: 4px; }
+  .full {
+    width: 100%;
+  }
+  .spaced {
+    margin-top: 12px;
+  }
+  .modules,
+  .servers {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    margin: 12px 0;
+    scrollbar-width: thin;
+  }
+  .server {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .server[data-current='true'] {
+    background: var(--accent);
+  }
+  .server-choice {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+  }
+  .server-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  button.server-open,
+  button.server-edit {
+    width: 28px;
+    height: 28px;
+    padding: 5px;
+    flex-shrink: 0;
+    opacity: 0;
+    border-color: transparent;
+  }
+  .server:hover .server-open,
+  .server:focus-within .server-open,
+  .server:hover .server-edit,
+  .server:focus-within .server-edit {
+    opacity: 1;
+  }
+  .server-edit svg {
+    display: block;
+    width: 16px;
+    height: 16px;
+  }
+  @media (hover: none) {
+    button.server-open,
+    button.server-edit {
+      opacity: 1;
+    }
+  }
+  .module {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .module[data-located='true'],
+  .server[data-located='true'] {
+    background: var(--accent);
+    outline: 1px solid var(--ring);
+    outline-offset: -1px;
+  }
+  .module label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+  }
+  .module-name {
+    overflow-wrap: anywhere;
+  }
+  .module small {
+    white-space: nowrap;
+  }
+  .module button {
+    font-size: 12px;
+    padding: 3px 6px;
+  }
+  .badge {
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+  .info:empty {
+    display: none;
+  }
+  .actions {
+    margin-top: 12px;
+  }
+  dialog {
+    max-width: 540px;
+    width: 90%;
+    max-height: 85vh;
+    background: var(--background);
+    color: var(--foreground);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+  dialog::backdrop {
+    background: var(--background);
+    opacity: 0.7;
+  }
+  dialog label {
+    display: block;
+    margin-top: 16px;
+  }
+  dialog label input {
+    display: block;
+    width: 100%;
+    margin-top: 6px;
+  }
+  .right {
+    margin-left: auto;
+  }
+  .small {
+    font-size: 12px;
+  }
+  label {
+    cursor: pointer;
+  }
+  @media (max-width: 700px) {
+    main {
+      padding: 10px;
+    }
+    .panels {
+      gap: 8px;
+    }
+    .section {
+      padding: 10px;
+    }
+    .module {
+      flex-wrap: wrap;
+    }
+  }
+</style>
+<style>
+  html[data-orca-presentation] body {
+    background: var(--popover);
+    color: var(--popover-foreground);
+  }
+  html[data-orca-presentation] body { height: auto; }
+  html[data-orca-presentation] main { height: auto; padding: 16px; gap: 0; }
+  html[data-orca-presentation] main > .toolbar,
+  html[data-orca-presentation] #worktree,
+  html[data-orca-presentation='bff'] #fe-section,
+  html[data-orca-presentation='fe'] #bff-section { display: none; }
+  html[data-orca-presentation] .panels { display: flex; min-height: 0; flex: 1; }
+  html[data-orca-presentation] .section {
+    flex: 1;
+    width: 100%;
+    padding: 0;
+    border: none;
+    background: transparent;
+    overflow: visible;
+  }
+  .popover-header { flex-wrap: nowrap; gap: 8px; min-height: 32px; margin-bottom: 12px; }
+  .popover-header h2 { flex: 1; font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .popover-header .search-field { width: 184px; }
+  .popover-header .picker-tools { display: flex; justify-content: flex-end; gap: 4px; }
+  .popover-header input { font-size: 12px; }
+  .popover-footer {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+  .popover-footer .info { margin: 0; font-size: 12px; }
+  .popover-footer .info:empty { display: none; }
+  .popover-actions { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .popover-actions #product { width: 172px; max-width: none; flex-shrink: 1; font-size: 12px; padding: 3px 6px; }
+  .popover-actions .service-toggle { width: 112px; flex-shrink: 0; height: 32px; padding: 0 12px; }
+  .popover-actions .service-actions { margin-left: auto; display: flex; flex-shrink: 0; gap: 4px; }
+  .service-restart { color: var(--muted-foreground); white-space: nowrap; }
+  .service-open:not([hidden]), #addServer:not([hidden]) { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .popover-actions .service-open, .popover-actions .service-restart, #addServer { height: 32px; padding: 0 8px; }
+  html[data-orca-presentation] dialog { max-height: calc(var(--picker-height-limit, 600px) - 32px); }
+  html[data-orca-presentation] dialog .spaced { margin-top: 16px; }
+  html[data-orca-presentation='fe'] .popover-actions #product { flex: 1; width: 0; min-width: 64px; }
+  .list-toggle { color: var(--muted-foreground); }
+  .picker-summary { margin: 0; padding: 4px 0; font-size: 12px; line-height: 16px; overflow: auto; scrollbar-width: thin; color: var(--muted-foreground); }
+  .picker-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+  .picker-tags .badge { max-width: 100%; padding: 2px 8px; font-size: 12px; font-weight: 500; overflow-wrap: anywhere; border-color: transparent; background: var(--secondary); color: var(--secondary-foreground); }
+  html[data-orca-presentation] .picker-list { flex: none; }
+  html[data-orca-presentation] .picker-list[hidden],
+  .picker-tools[hidden] { display: none; }
+  html[data-orca-presentation] .picker-list .modules { flex: 1; }
+  html[data-orca-presentation] .popover-header { flex-wrap: wrap; }
+  html[data-orca-presentation] .picker-tools { margin-left: auto; }
+  .icon-button .loading, .search-clear .loading { animation: service-spin 1s linear infinite; }
+  @media (prefers-reduced-motion: reduce) { .icon-button .loading, .search-clear .loading { animation: none; } }
+  html[data-orca-presentation] .spaced { margin-top: 0; }
+  html[data-orca-presentation='bff'] .advanced-settings { margin-top: 0; }
+  html[data-orca-presentation='bff'] .advanced-fields { max-height: 400px; }
+  html[data-orca-presentation] .servers { margin: 0; padding: 0 3px; }
+  html[data-orca-presentation] .module-browser { margin-top: 0; gap: 8px; }
+  html[data-orca-presentation] .modules { min-width: 0; padding: 0 3px; }
+  html[data-orca-presentation] .module {
+    flex-wrap: nowrap;
+    min-height: 36px;
+    padding: 6px;
+    border-bottom: none;
+    border-radius: var(--radius-md, 6px);
+  }
+  html[data-orca-presentation] .module:hover { background: var(--accent); }
+  html[data-orca-presentation] .module-details { flex: 1; flex-wrap: nowrap; gap: 6px; }
+  html[data-orca-presentation] .module-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  html[data-orca-presentation] .module button { flex-shrink: 0; padding: 2px 5px; font-size: 11px; color: var(--muted-foreground); }
+  html[data-orca-presentation] .module small { font-size: 11px; font-variant-numeric: tabular-nums; }
+  html[data-orca-presentation] .module-group {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 4px 6px;
+    margin: 0;
+    font-size: 11px;
+    background: var(--popover);
+  }
+  html[data-orca-presentation] .alphabet { align-self: stretch; min-height: 0; gap: 0; padding: 3px 0; }
+  html[data-orca-presentation] .alphabet button { flex: 1 0 16px; min-width: 20px; min-height: 16px; padding: 0; line-height: 1; }
+  html[data-orca-presentation] .server { padding: 10px 6px; border-radius: var(--radius-md, 6px); border-bottom: none; }
+  html[data-orca-presentation] .server:hover { background: var(--accent); }
+  html[data-orca-presentation] .server input { margin: 0; }
+  html[data-orca-presentation] .server .badge { padding: 1px 5px; }
+  @media (max-width: 360px) {
+    .popover-actions { flex-wrap: wrap; }
+    .popover-actions #product { flex: 1 0 100%; }
+  }
+  .picker-loading { display: grid; place-items: center; height: 100%; margin: 0; font-size: 12px; }
+</style>
+<main>
+  <div class="toolbar">
+    <h1>服务</h1>
+    <button id="refresh">刷新</button>
+  </div>
+  <p id="worktree" class="path muted"></p>
+  <div class="panels">
+    <section class="section" id="bff-section">
+      <div class="toolbar">
+        <h2>BFF 后端</h2>
+        <div class="row">
+          <button class="quiet service-restart" id="restart-bff" hidden>重启</button>
+          <button class="primary service-toggle" id="toggle-bff">启动</button>
+        </div>
+      </div>
+      <div class="row spaced product-controls">
+        <div class="search-field">
+          <input id="serverSearch" placeholder="搜索 IP / 描述" aria-label="搜索后端服务器" />
+          <button id="serverSearchClear" class="search-clear" aria-label="清空后端搜索" hidden></button>
+        </div>
+        <button id="locateServer" class="icon-button" aria-label="定位已选服务器" title="定位已选服务器" disabled></button>
+        <button id="checkServers" class="icon-button" aria-label="重新检测服务器" title="重新检测服务器"></button>
+      </div>
+      <div id="servers" class="servers" role="radiogroup" aria-label="后端服务器"></div>
+      <div id="bff-advanced" class="advanced-settings" role="region" aria-label="高级配置" hidden>
+        <div id="bff-environment-fields" class="advanced-fields"></div>
+      </div>
+      <button id="advanced-bff" class="quiet advanced-toggle" aria-expanded="false" aria-controls="bff-advanced" hidden>高级配置</button>
+      <p id="bff-info" class="info muted small"></p>
+    </section>
+    <section class="section" id="fe-section">
+      <div class="toolbar">
+        <h2>FE 前端</h2>
+        <div class="row">
+          <button class="service-open" id="open-fe" hidden>打开</button>
+          <button class="quiet service-restart" id="restart-fe" hidden>重启</button>
+          <button class="primary service-toggle" id="toggle-fe">启动</button>
+        </div>
+      </div>
+      <div class="row spaced product-controls">
+        <button id="selectAll" class="icon-button" role="checkbox" aria-checked="false" aria-label="全选" title="全选"></button>
+        <button id="locateSelected" class="icon-button" aria-label="选择变更模块" title="选择变更模块"></button>
+        <div class="search-field">
+          <input id="search" placeholder="搜索模块 / 端口" aria-label="搜索前端模块" />
+          <button id="searchClear" class="search-clear" aria-label="清空前端搜索" hidden></button>
+        </div>
+        <select id="product" aria-label="前端产品">
+          <option value="cloud">Cloud</option>
+        </select>
+      </div>
+      <div class="module-browser">
+        <div id="modules" class="modules"></div>
+        <nav id="alphabet" class="alphabet" aria-label="按首字母定位模块"></nav>
+      </div>
+      <p id="fe-info" class="info muted small"></p>
+    </section>
+  </div>
+</main>
+<dialog id="editor" aria-labelledby="editorTitle">
+  <div id="serverForm">
+    <div class="toolbar">
+      <h2 id="editorTitle">编辑服务器</h2>
+    </div>
+    <label>IP / 域名<input id="serverHost" required autocomplete="off" placeholder="IP、域名或 http(s)://IP" /></label
+    ><label>描述<input id="serverName" required maxlength="120" /></label>
+    <div class="row spaced">
+      <button type="button" id="deleteServer" class="danger-ghost">删除</button>
+      <div class="row right">
+        <button type="button" id="closeEditor" class="quiet">取消</button>
+        <button type="button" id="saveEditor" class="primary">保存</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+<dialog id="deleteConfirmation" role="alertdialog" aria-labelledby="deleteTitle" aria-describedby="deleteDescription">
+  <h2 id="deleteTitle">删除服务器</h2>
+  <p id="deleteDescription">确认删除该服务器记录？</p>
+  <div class="row spaced">
+    <button id="cancelDelete" class="quiet right">取消</button>
+    <button id="confirmDelete" class="destructive">删除</button>
+  </div>
+</dialog>
+<script>
+  const $ = (id) => document.getElementById(id)
+  const presentation = document.documentElement.dataset.orcaPresentation || null
+  const pending = new Map()
+  let sequence = 0,
+    snapshot,
+    selected = new Set(),
+    selectedHost = '',
+    busy = false,
+    editingHost = null
+  const searches = Object.fromEntries(['serverSearch', 'search'].map((id) =>
+    [id, { query: '', pending: false, composing: false, timer: null }]))
+  let panelVisible = true, statusPending = false
+  const finished = new Set(['stopped', 'exited', 'failed', 'cancelled'])
+  const serviceActions = new Map()
+  const reportedFailures = new Set()
+  const listExpanded = { bff: !presentation, fe: !presentation }
+  const needsListExpansion = () => presentation && snapshot && !listExpanded[presentation] &&
+    (!snapshot.runs[presentation] || finished.has(snapshot.runs[presentation].state))
+  let checksPending = false, lastStatusError = ''
+  let pickerFrame = 0, maxPanelHeight = 1200
+  window.addEventListener('message', (event) => {
+    if (event.source !== parent) return
+    if (event.data?.type === 'orca-panel-height-limit' && Number.isFinite(event.data.height)) {
+      if (maxPanelHeight !== event.data.height) {
+        maxPanelHeight = event.data.height
+        document.documentElement.style.setProperty('--picker-height-limit', `${maxPanelHeight}px`)
+        schedulePickerSize()
+      }
+      return
+    }
+    if (event.data?.type === 'orca-panel-visibility' && typeof event.data.visible === 'boolean') {
+      const resuming = !panelVisible && event.data.visible
+      panelVisible = event.data.visible
+      if (resuming) refreshStatus()
+      return
+    }
+    if (event.data?.type !== 'orca-panel-action-result') return
+    const callback = pending.get(event.data.requestId)
+    if (!callback) return
+    clearTimeout(callback.timer)
+    pending.delete(event.data.requestId)
+    event.data.ok
+      ? callback.resolve(event.data.value)
+      : callback.reject(new Error(event.data.error))
+  })
+  function request(args) {
+    return new Promise((resolve, reject) => {
+      const requestId = String(++sequence)
+      const timer = setTimeout(() => {
+        pending.delete(requestId)
+        reject(new Error('响应超时，请刷新确认结果'))
+      }, 60000)
+      pending.set(requestId, { resolve, reject, timer })
+      parent.postMessage(
+        {
+          type: 'orca-panel-action',
+          requestId,
+          action: 'commands.invoke',
+          params: {
+            commandId: 'launcher.request',
+            args: JSON.parse(JSON.stringify({ product: $('product').value, ...args }))
+          }
+        },
+        '*'
+      )
+    })
+  }
+  function text(tag, value, className) {
+    const element = document.createElement(tag)
+    element.textContent = value
+    if (className) element.className = className
+    return element
+  }
+  function notice(message) {
+    if (!message) return
+    parent.postMessage({ type: 'orca-panel-notice',
+      message: message.replace(/^Error:\s*/, '').split(/\n\s*at\s/)[0].slice(0, 1000) }, '*')
+  }
+  async function action(fn, service, operation) {
+    if (busy || (service && serviceActions.has(service))) return
+    if (service) serviceActions.set(service, operation)
+    else busy = true
+    renderServers()
+    renderModules()
+    renderRuns()
+    try {
+      await fn()
+    } catch (error) {
+      notice(error.message, true)
+    } finally {
+      if (service) serviceActions.delete(service)
+      else busy = false
+      renderServers()
+      renderModules()
+      renderRuns()
+    }
+  }
+  let activeLetter = '', locatedModule = '', locatedHost = ''
+  let locateAfterLoad = Boolean(presentation)
+  let changedApps = [], autoChanged = true
+  let advancedExpanded = false, environment = null, advancedListScrollTop = 0
+  const environmentValues = new Map()
+  function renderAdvanced() {
+    const run = snapshot?.runs?.bff
+    const active = run && !finished.has(run.state)
+    const configurable = Boolean(snapshot && !active && !serviceActions.has('bff'))
+    const disabled = busy || !configurable
+    if (active) advancedExpanded = false
+    $('advanced-bff').hidden = !configurable
+    $('advanced-bff').disabled = disabled
+    $('advanced-bff').setAttribute('aria-expanded', String(advancedExpanded))
+    $('advanced-bff').replaceChildren(icon(advancedExpanded ? 'up' : 'down'), text('span', '高级配置'))
+    $('bff-advanced').hidden = !configurable || !advancedExpanded
+    for (const input of $('bff-environment-fields').querySelectorAll('input, textarea, button')) input.disabled = disabled
+  }
+  async function loadEnvironment() {
+    const fields = $('bff-environment-fields')
+    fields.replaceChildren(text('p', '正在读取配置…', 'environment-description'))
+    environment = await request({ action: 'bffEnvironment' })
+    environmentValues.clear()
+    fields.replaceChildren()
+    for (const group of environment.groups) {
+      const section = text('div', '', 'environment-group')
+      section.append(text('h3', group.title))
+      if (group.description) section.append(text('p', group.description, 'environment-description'))
+      for (const field of group.fields) {
+        environmentValues.set(field.key, field.value)
+        const row = text('div', '', 'environment-field')
+        const label = text('label', field.key, 'environment-key')
+        const input = document.createElement(field.value.includes('\n') && !field.secret ? 'textarea' : 'input')
+        if (input.tagName === 'INPUT') input.type = field.secret ? 'password' : 'text'
+        input.value = field.value
+        input.dataset.envKey = field.key
+        input.id = `environment-${field.key}`
+        label.htmlFor = input.id
+        input.autocomplete = 'off'
+        input.spellcheck = false
+        input.setAttribute('aria-label', field.key)
+        input.oninput = () => environmentValues.set(field.key, input.value)
+        let control = input
+        if (field.key === 'HOST') {
+          control = text('div', '', 'search-field')
+          const button = text('button', '', 'quiet search-clear')
+          button.type = 'button'
+          button.id = 'detect-host'
+          button.title = '检测本机 IP'
+          button.setAttribute('aria-label', button.title)
+          button.append(icon('locate'))
+          button.onclick = () => action(async () => {
+            const spinner = icon('loading')
+            spinner.classList.add('loading')
+            button.replaceChildren(spinner)
+            button.setAttribute('aria-busy', 'true')
+            try {
+              const result = await request({ action: 'detectBffLocalHost' })
+              input.value = result.host
+              environmentValues.set('HOST', result.host)
+            } finally {
+              button.replaceChildren(icon('locate'))
+              button.setAttribute('aria-busy', 'false')
+            }
+          })
+          control.append(input, button)
+        }
+        row.append(label, control)
+        section.append(row)
+        if (field.description) section.append(text('p', field.description, 'environment-description'))
+      }
+      fields.append(section)
+    }
+    renderAdvanced()
+    schedulePickerSize()
+  }
+  function environmentDraft() {
+    if (!environment) return undefined
+    const changes = Object.fromEntries(environment.groups.flatMap(group => group.fields)
+      .filter(field => environmentValues.get(field.key) !== field.value)
+      .map(field => [field.key, environmentValues.get(field.key)]))
+    return Object.keys(changes).length ? { revision: environment.revision, changes } : undefined
+  }
+  $('advanced-bff').onclick = () => {
+    if (presentation === 'bff' && !advancedExpanded) advancedListScrollTop = $('servers').scrollTop
+    advancedExpanded = !advancedExpanded
+    renderAdvanced()
+    renderPicker()
+    if (presentation === 'bff' && !advancedExpanded) {
+      renderServers()
+      $('servers').scrollTop = advancedListScrollTop
+    }
+    if (advancedExpanded && !environment) action(async () => {
+      try { await loadEnvironment() }
+      catch (error) {
+        $('bff-environment-fields').replaceChildren(text('p', '配置读取失败，收起后可重新打开', 'environment-description'))
+        throw error
+      }
+    })
+  }
+  const entryModules = () =>
+    (snapshot?.modules || [])
+      .filter((module) => module.isShell && module.available)
+      .map((module) => module.name)
+  async function load(refresh = false, expanded) {
+    snapshot = await request({ action: 'snapshot', refresh, expanded })
+    const loaded = snapshot.loadedLists ?? ['bff', 'fe']
+    for (const kind of ['bff', 'fe']) listExpanded[kind] = loaded.includes(kind)
+    selected = new Set([
+      ...snapshot.selection.apps.filter((name) => !listExpanded.fe ||
+        snapshot.modules.some((module) => module.name === name && module.available)),
+      ...entryModules()
+    ])
+    const currentProduct = $('product').value
+    $('product').replaceChildren(
+      ...snapshot.products.map((item) => {
+        const option = text('option', item.label)
+        option.value = item.id
+        return option
+      })
+    )
+    $('product').value = snapshot.product ?? currentProduct
+    $('product').title = '启动时包含产品入口：' + entryModules().join(', ')
+    selectedHost = snapshot.selection.host
+    changedApps = (snapshot.changedApps || []).filter((name) =>
+      snapshot.modules.some((module) => module.name === name && module.available && !module.isShell)
+    )
+    autoChanged = snapshot.selection.autoChanged !== false
+    if (autoChanged && changedApps.some((name) => !selected.has(name))) {
+      changedApps.forEach((name) => selected.add(name))
+      await save()
+    }
+    if (snapshot.changeError) notice(snapshot.changeError, true)
+    if (snapshot.moduleError) notice(snapshot.moduleError)
+    $('worktree').textContent = snapshot.worktree
+    renderServers()
+    renderModules()
+    renderRuns()
+    renderPicker()
+    if (presentation && listExpanded[presentation] && locateAfterLoad) {
+      locateAfterLoad = false
+      presentation === 'bff' ? locateServer() : locateSelected()
+    }
+  }
+  function renderServers() {
+    if (!snapshot || !listExpanded.bff || (presentation === 'bff' && advancedExpanded)) return
+    renderServerCheck()
+    const target = serverLocation()
+    const locate = $('locateServer')
+    locate.disabled = busy || !target
+    const label = target?.host === selectedHost ? '定位已选服务器' : '定位当前服务器'
+    locate.setAttribute('aria-label', label)
+    locate.title = label
+    locate.replaceChildren(icon('locate'))
+    const scrollTop = $('servers').scrollTop
+    $('servers').replaceChildren()
+    const query = searches.serverSearch.query
+    const matches = matchingServers(query)
+    $('servers').classList.toggle('empty', !matches.length)
+    if (!matches.some((server) => snapshot.serverChecks?.[server.host]?.available !== false)
+      && !searches.serverSearch.pending) {
+      const empty = text('div', '', 'module-message server-empty')
+      const message = text('p', query ? '没有匹配的可用 IP' : '暂无可用 IP', 'muted')
+      message.setAttribute('role', 'status')
+      empty.append(message)
+      if (query && !matches.length) {
+        const add = text('button', '＋ 新增', 'quiet')
+        add.id = 'addServer'
+        add.disabled = busy || serviceActions.has('bff')
+        add.onclick = () => editServer()
+        empty.append(add)
+      }
+      $('servers').append(empty)
+    }
+    let unavailableGroup
+    for (const server of matches) {
+      const unavailable = snapshot.serverChecks?.[server.host]?.available === false
+      if (unavailable && !unavailableGroup) {
+        unavailableGroup = text('div', '', 'server-section')
+        unavailableGroup.append(text('h3', '不可用', 'module-group'))
+        $('servers').append(unavailableGroup)
+      }
+      const row = text('div', '', 'server')
+      row.dataset.host = server.host
+      row.dataset.current = String(server.host === snapshot.currentHost)
+      row.dataset.located = String(server.host === locatedHost)
+      const radio = document.createElement('input')
+      radio.type = 'radio'
+      radio.name = 'backend'
+      radio.value = server.host
+      radio.checked = server.host === selectedHost
+      radio.disabled = busy || serviceActions.has('bff')
+      radio.setAttribute('aria-label', `选择 ${server.host} ${server.name}`)
+      radio.onchange = () =>
+        action(async () => {
+          selectedHost = server.host
+          locatedHost = ''
+          await save('bff')
+        })
+      const choice = document.createElement('label')
+      choice.className = 'server-choice'
+      const copy = text('span', '', 'server-copy')
+      const address = text('span', '', 'row')
+      address.append(text('span', server.host, 'path'))
+      if (server.host === snapshot.currentHost) address.append(text('span', '当前', 'badge'))
+      copy.append(address, text('span', server.name, 'muted small'))
+      choice.append(radio, copy)
+      const edit = text('button', '', 'server-edit')
+      edit.disabled = busy || serviceActions.has('bff')
+      edit.setAttribute('aria-label', `编辑 ${server.host}`)
+      edit.title = '编辑服务器'
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+      svg.setAttribute('viewBox', '0 0 24 24')
+      svg.setAttribute('fill', 'none')
+      svg.setAttribute('stroke', 'currentColor')
+      svg.setAttribute('stroke-width', '2')
+      svg.setAttribute('aria-hidden', 'true')
+      const pencil = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+      pencil.setAttribute('d', 'm16 3 5 5-12 12-6 1 1-6Z M14 5l5 5')
+      svg.append(pencil)
+      edit.append(svg)
+      edit.onclick = () => editServer(server)
+      const open = text('button', '', 'server-open')
+      open.title = `在当前工作树的新标签页打开 http://${server.host.includes(':') ? '[' + server.host + ']' : server.host}:5000`
+      open.setAttribute('aria-label', `在新标签页打开 ${server.host}`)
+      open.append(icon('external'))
+      open.disabled = busy
+      open.onclick = () => action(() => request({ action: 'openServer', host: server.host }))
+      row.append(choice, open, edit)
+      ;(unavailable ? unavailableGroup : $('servers')).append(row)
+    }
+    $('servers').scrollTop = scrollTop
+    schedulePickerSize()
+  }
+  function serverLocation() {
+    return snapshot?.servers.find((server) => server.host === selectedHost)
+      ?? snapshot?.servers.find((server) => server.host === snapshot.currentHost)
+  }
+  function centerListItem(list, row) {
+    if (!row) return
+    const item = row.getBoundingClientRect(), viewport = list.getBoundingClientRect()
+    list.scrollTop += item.top + item.height / 2 - viewport.top - list.clientHeight / 2
+  }
+  function locateServer() {
+    const target = serverLocation()
+    if (!target) return
+    locatedHost = target.host
+    resetSearch('serverSearch')
+    renderServers()
+    requestAnimationFrame(() => centerListItem($('servers'),
+      [...$('servers').querySelectorAll('.server')].find((item) => item.dataset.host === locatedHost)))
+  }
+  $('locateServer').onclick = locateServer
+  const initial = (module) => (/^[a-z]/i.test(module.name) ? module.name[0].toUpperCase() : '#')
+  function matchingModules() {
+    const query = searches.search.query
+    return (snapshot?.modules || [])
+      .filter(
+        (module) =>
+          module.available &&
+          !module.isShell &&
+          [module.name, String(module.port ?? '')].some((value) => matchesSearch(value, query))
+      )
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }
+  function visibleModules() {
+    return matchingModules()
+  }
+  function renderAlphabet() {
+    const available = new Set(matchingModules().map(initial))
+    $('alphabet').replaceChildren()
+    if (snapshot.moduleError || !available.size) return
+    for (const letter of [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ', '#']) {
+      if (presentation && !available.has(letter)) continue
+      const button = text('button', letter || '全部')
+      button.dataset.letter = letter
+      button.disabled = busy || Boolean(letter && !available.has(letter))
+      button.setAttribute('aria-pressed', String(activeLetter === letter))
+      button.onclick = () => {
+        const target = [...$('modules').querySelectorAll('.module-section')].find(
+          (node) => node.dataset.letter === letter
+        )
+        if (target)
+          $('modules').scrollTop +=
+            target.getBoundingClientRect().top - $('modules').getBoundingClientRect().top
+        updateActiveLetter()
+      }
+      $('alphabet').append(button)
+    }
+  }
+  function updateActiveLetter() {
+    const list = $('modules'), top = list.getBoundingClientRect().top + 1
+    const groups = [...list.querySelectorAll('.module-section')]
+    let current = groups[0]
+    for (const group of groups) {
+      if (group.getBoundingClientRect().top > top) break
+      current = group
+    }
+    activeLetter = current?.dataset.letter || ''
+    for (const button of $('alphabet').querySelectorAll('button'))
+      button.setAttribute('aria-pressed', String(button.dataset.letter === activeLetter))
+  }
+  $('modules').addEventListener('scroll', updateActiveLetter, { passive: true })
+  function selectDependencies(module) {
+    const queue = [module.name],
+      visited = new Set()
+    while (queue.length) {
+      const name = queue.shift()
+      if (visited.has(name)) continue
+      visited.add(name)
+      const item = snapshot.modules.find((item) => item.name === name)
+      if (!item?.available) continue
+      selected.add(name)
+      queue.push(...item.dependencies)
+    }
+  }
+  function renderModules() {
+    if (!snapshot || !listExpanded.fe) return
+    const scrollTop = $('modules').scrollTop
+    $('modules').replaceChildren()
+    const modules = snapshot.moduleError ? [] : visibleModules()
+    $('modules').classList.toggle('empty', !modules.length)
+    renderAlphabet()
+    let group, section
+    for (const module of modules) {
+      if (group !== initial(module)) {
+        group = initial(module)
+        section = text('div', '', 'module-section')
+        section.dataset.letter = group
+        const heading = text('h3', group, 'module-group')
+        heading.dataset.letter = group
+        section.append(heading)
+        $('modules').append(section)
+      }
+      const row = text('div', '', 'module'),
+        label = document.createElement('label'),
+        input = document.createElement('input')
+      row.dataset.module = module.name
+      row.dataset.located = String(selected.has(module.name) && module.name === locatedModule)
+      input.type = 'checkbox'
+      input.checked = selected.has(module.name)
+      input.disabled = !module.available || busy || serviceActions.has('fe')
+      input.onchange = () =>
+        action(async () => {
+          input.checked ? selected.add(module.name) : selected.delete(module.name)
+          if (!input.checked && changedApps.includes(module.name)) autoChanged = false
+          await save()
+        })
+      const details = text('span', '', 'module-details')
+      details.append(text('span', module.name, 'module-name'))
+      label.append(input, details)
+      row.append(
+        label,
+        text(
+          'small',
+          module.available ? (module.port ? ':' + module.port : '') : '当前产品不可启动',
+          'muted'
+        )
+      )
+      if (module.dependencies.length) {
+        const deps = text('button', presentation ? `+${module.dependencies.length}` : `依赖 ${module.dependencies.length}`)
+        deps.title = '连同依赖一起选择：' + module.dependencies.join(', ')
+        deps.setAttribute('aria-label', `${module.name}：连同 ${module.dependencies.length} 个依赖一起选择`)
+        deps.disabled = busy || serviceActions.has('fe') || !module.available
+        deps.onclick = () =>
+          action(async () => {
+            selectDependencies(module)
+            await save()
+          })
+        details.append(deps)
+      }
+      row.title = module.available
+        ? module.path || module.name
+        : '未找到当前产品的模块启动目录，安装依赖不会补齐该目录'
+      section.append(row)
+    }
+    if (!modules.length && !searches.search.pending && !snapshot.moduleError) {
+      const message = text(
+        'p',
+        '没有匹配的模块',
+        'module-message muted'
+      )
+      message.setAttribute('role', 'status')
+      $('modules').append(message)
+    }
+    $('modules').scrollTop = scrollTop
+    updateActiveLetter()
+    renderSelectedNavigation()
+    schedulePickerSize()
+  }
+  const selectedModules = () => selectableModules().filter((module) => selected.has(module.name))
+    .sort((a, b) => a.name.localeCompare(b.name))
+  function renderSelectedNavigation() {
+    const count = selectedModules().length
+    const total = selectableModules().length
+    const all = count > 0 && count === total
+    const select = $('selectAll')
+    select.disabled = busy || serviceActions.has('fe') || !total
+    select.setAttribute('aria-checked', all ? 'true' : count ? 'mixed' : 'false')
+    select.setAttribute('aria-label', all ? '取消选择' : '全选')
+    select.title = all ? '取消选择' : '全选'
+    select.replaceChildren(icon(all ? 'checked' : count ? 'mixed' : 'square'))
+    const locate = $('locateSelected')
+    locate.disabled = busy || serviceActions.has('fe') || (!count && !changedApps.length)
+    const label = count ? '定位下一个已选模块' : '选择当前分支的变更模块'
+    locate.setAttribute('aria-label', label)
+    locate.title = label
+    locate.replaceChildren(icon('locate'))
+  }
+  function locateSelected() {
+    const modules = selectedModules()
+    if (!modules.length) return
+    const index = modules.findIndex((module) => module.name === locatedModule)
+    locatedModule = modules[(index + 1) % modules.length].name
+    resetSearch('search')
+    activeLetter = ''
+    renderModules()
+    requestAnimationFrame(() => {
+      centerListItem($('modules'), [...$('modules').querySelectorAll('.module')]
+        .find((row) => row.dataset.module === locatedModule))
+      updateActiveLetter()
+    })
+  }
+  $('locateSelected').onclick = () => {
+    if (selectedModules().length) {
+      locateSelected()
+      return
+    }
+    action(async () => {
+      const changes = await request({ action: 'changedModules' })
+      const available = new Set(selectableModules().map((module) => module.name))
+      changedApps = changes.apps.filter((name) => available.has(name))
+      if (!changedApps.length) return
+      const previous = selected, previousAutoChanged = autoChanged
+      selected = new Set([...selected, ...changedApps])
+      autoChanged = true
+      locatedModule = ''
+      try {
+        await save()
+        locateSelected()
+      } catch (error) {
+        selected = previous
+        autoChanged = previousAutoChanged
+        throw error
+      }
+    })
+  }
+
+  async function save(kind) {
+    await request({
+      action: 'saveSelection',
+      kind,
+      apps: [...selected],
+      autoChanged,
+      proxy: false,
+      host: selectedHost
+    })
+    notice('')
+  }
+  function icon(name) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    for (const [key, value] of Object.entries({
+      viewBox: '0 0 24 24',
+      fill: 'none',
+      stroke: 'currentColor',
+      'stroke-width': '2',
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+      'aria-hidden': 'true'
+    }))
+      svg.setAttribute(key, value)
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+    path.setAttribute(
+      'd',
+      ({
+        trash: 'M3 6h18 M9 6V4h6v2 M5 6l1 14h12l1-14 M10 10v6 M14 10v6',
+        clear: 'm6 6 12 12 M6 18 18 6',
+        down: 'm6 9 6 6 6-6',
+        up: 'm6 15 6-6 6 6',
+        refresh: 'M3 11a9 9 0 0 1 15.4-6.4L21 7 M21 3v4h-4 M21 13a9 9 0 0 1-15.4 6.4L3 17 M7 17H3v4',
+        stop: 'M6 6h12v12H6z',
+        loading: 'M21 12a9 9 0 1 1-6.2-8.56',
+        external: 'M15 3h6v6 M10 14 21 3 M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5',
+        square: 'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z',
+        checked: 'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z m3 9 3 3 5-6',
+        mixed: 'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z M8 12h8',
+        locate: 'M12 3v3 M12 18v3 M3 12h3 M18 12h3 M19 12a7 7 0 1 1-14 0 7 7 0 0 1 14 0 M12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4',
+        play: 'm9 5 12 7-12 7V5Z'
+      })[name]
+    )
+    if (name === 'stop') path.setAttribute('fill', 'currentColor')
+    svg.append(path)
+    return svg
+  }
+  function renderRuns() {
+    for (const id of ['product', 'refresh', 'deleteServer', 'closeEditor', 'cancelDelete', 'confirmDelete'])
+      $(id).disabled = busy || (['product', 'refresh'].includes(id) && serviceActions.size > 0)
+    renderSelectedNavigation()
+    renderEditorSave()
+    renderAdvanced()
+    for (const kind of ['bff', 'fe']) {
+      const run = snapshot?.runs?.[kind],
+        active = run && !finished.has(run.state)
+      const button = $('toggle-' + kind)
+      const count = kind === 'fe' ? selectedModules().length : 0
+      const operation = serviceActions.get(kind)
+      const stopping = operation === 'stop' || run?.state === 'stopping'
+      const starting = !stopping && (operation === 'start' || operation === 'restart' ||
+        ['starting', 'waiting', 'preparing'].includes(run?.state) ||
+        (run?.state === 'running' && run.health !== 'ready'))
+      const symbol = icon(starting || stopping ? 'loading' : active ? 'stop' : 'play')
+      symbol.classList.add('service-state-icon')
+      if (starting || stopping) symbol.classList.add('loading')
+      button.replaceChildren(
+        symbol,
+        text('span', stopping ? '停止中…' : starting ? '启动中' : active ? '停止'
+          : count ? `启动（${count}）` : '启动', 'service-state-label')
+      )
+      const canStop = starting && active && !operation
+      button.dataset.canStop = String(Boolean(canStop))
+      if (canStop) {
+        const stop = icon('stop')
+        stop.classList.add('service-stop-icon')
+        button.append(stop, text('span', '停止', 'service-stop-label'))
+      }
+      button.setAttribute('aria-busy', String(starting || stopping))
+      button.disabled =
+        busy ||
+        Boolean(operation) ||
+        !snapshot ||
+        run?.state === 'stopping' ||
+        (!active && (kind === 'bff' ? !selectedHost : !count))
+      button.classList.toggle('primary', !active)
+      const restart = $('restart-' + kind)
+      restart.hidden = run?.state !== 'running' || run.health !== 'ready' || starting || stopping
+      restart.disabled = busy || Boolean(operation)
+      if (kind === 'fe') {
+        $('open-fe').hidden = restart.hidden
+        $('open-fe').disabled = busy || Boolean(operation)
+      }
+      $(kind + '-info').textContent = !presentation && run?.state === 'preparing' ? '正在准备依赖…' : ''
+      if (['failed', 'pending-timeout'].includes(run?.state) && !reportedFailures.has(run.id)) {
+        reportedFailures.add(run.id)
+        notice(`${kind.toUpperCase()} 启动失败：${run.error || '进程已结束，请查看终端'}`)
+      }
+    }
+    renderPicker()
+  }
+  $('open-fe').prepend(icon('external'))
+  $('open-fe').onclick = () => action(() => request({ action: 'openFrontend', id: snapshot.runs.fe.id }))
+  for (const kind of ['bff', 'fe']) {
+    $('toggle-' + kind).onclick = () => {
+      const run = snapshot?.runs?.[kind]
+      const operation = run && !finished.has(run.state) ? 'stop' : 'start'
+      const host = selectedHost
+      return action(async () => {
+        if (operation === 'stop') {
+          await request({ action: 'stop', kind, id: run.id })
+        } else {
+          const draft = kind === 'bff' ? environmentDraft() : undefined
+          const submitted = request({ action: 'start', kind, apps: [...selected],
+            autoChanged, proxy: false, host, ...(draft ? { environment: draft } : {}) })
+          if (presentation && !draft) parent.postMessage({ type: 'orca-panel-dismiss' }, '*')
+          await submitted
+          if (presentation && draft) parent.postMessage({ type: 'orca-panel-dismiss' }, '*')
+          if (kind === 'bff') snapshot.currentHost = host
+          if (kind === 'bff' && !presentation && environment) await loadEnvironment()
+        }
+        snapshot.runs = await request({ action: 'status' })
+        if (needsListExpansion()) await load(false, true)
+        notice('')
+      }, kind, operation)
+    }
+    $('restart-' + kind).onclick = () => action(async () => {
+      const draft = kind === 'bff' ? environmentDraft() : undefined
+      const submitted = request({ action: 'restart', kind, id: snapshot.runs[kind].id,
+        apps: [...selected], autoChanged, proxy: false, host: selectedHost, ...(draft ? { environment: draft } : {}) })
+      if (presentation && !draft) parent.postMessage({ type: 'orca-panel-dismiss' }, '*')
+      await submitted
+      if (presentation && draft) parent.postMessage({ type: 'orca-panel-dismiss' }, '*')
+      if (kind === 'bff' && !presentation && environment) await loadEnvironment()
+      snapshot.runs = await request({ action: 'status' })
+    }, kind, 'restart')
+  }
+  $('refresh').onclick = () => action(() => load(true))
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && presentation && !document.querySelector('dialog[open]'))
+      parent.postMessage({ type: 'orca-panel-dismiss' }, '*')
+  })
+
+  $('product').onchange = () =>
+    action(() => {
+      activeLetter = ''
+      locatedModule = ''
+      locateAfterLoad = Boolean(presentation)
+      resetSearch('search')
+      return load(Boolean(presentation), true)
+    })
+  const selectableModules = () =>
+    (snapshot?.modules || []).filter((module) => module.available && !module.isShell)
+  $('selectAll').onclick = () =>
+    action(async () => {
+      const choices = selectableModules()
+      if (choices.every((module) => selected.has(module.name))) {
+        selected = new Set(entryModules())
+        locatedModule = ''
+        autoChanged = false
+      }
+      else choices.forEach((module) => selected.add(module.name))
+      await save()
+    })
+  function editServer(server) {
+    if (busy) return
+    editingHost = server?.host ?? null
+    const query = searches.serverSearch.query, ip = inputIp(query)
+    $('serverHost').value = server?.host || ip
+    $('serverName').value = server?.name ?? (ip ? '' : query)
+    $('editorTitle').textContent = server ? '编辑服务器' : '添加服务器'
+    $('deleteServer').hidden = !server
+    renderEditorSave()
+    $('editor').showModal()
+    schedulePickerSize()
+    $(server || !ip ? 'serverHost' : 'serverName').focus()
+  }
+  function inputIp(value) {
+    let host = value.trim()
+    try {
+      if (/^https?:\/\//i.test(host)) {
+        const match = host.match(/^https?:\/\/(\[[^\]]+\]|[^/:?#]+)(?::\d+)?(?:[/?#]|$)/i)
+        if (!match) return ''
+        host = match[1]
+        new URL(value.trim())
+      }
+      host = host.replace(/^\[|\]$/g, '')
+      if (host.includes(':')) return new URL(`http://[${host}]`).hostname.slice(1, -1)
+      const parts = host.split('.')
+      return parts.length === 4 && parts.every((part) =>
+        /^(0|[1-9]\d{0,2})$/.test(part) && Number(part) <= 255) ? host : ''
+    } catch {
+      return ''
+    }
+  }
+  function matchesSearch(value, query) {
+    return value.toLowerCase().includes(query.toLowerCase())
+  }
+  function matchingServers(query) {
+    const value = inputIp(query) || query
+    return [...(snapshot?.servers || [])].reverse().filter((server) =>
+      [server.host, server.name].some((field) => matchesSearch(field, value)))
+      .sort((a, b) => Number(snapshot.serverChecks?.[a.host]?.available === false)
+        - Number(snapshot.serverChecks?.[b.host]?.available === false))
+  }
+  function renderSearch(id) {
+    if (id === 'search') {
+      activeLetter = ''
+      renderModules()
+    } else renderServers()
+  }
+  function resetSearch(id) {
+    clearTimeout(searches[id].timer)
+    Object.assign(searches[id], { query: '', pending: false, composing: false })
+    $(id).value = ''
+    $(id + 'Clear').hidden = true
+  }
+  for (const id of ['serverSearch', 'search']) {
+    const input = $(id), state = searches[id], clear = $(id + 'Clear')
+    const update = () => {
+      clearTimeout(state.timer)
+      clear.hidden = !input.value
+      state.pending = true
+      if (!input.value && !state.composing) resetSearch(id)
+      else if (!state.composing) state.timer = setTimeout(() => {
+        state.query = input.value.trim()
+        state.pending = false
+        renderSearch(id)
+      }, 300)
+      renderSearch(id)
+    }
+    input.oninput = update
+    input.addEventListener('compositionstart', () => { state.composing = true; update() })
+    input.addEventListener('compositionend', () => { state.composing = false; update() })
+    clear.append(icon('clear'))
+    clear.onclick = () => {
+      resetSearch(id)
+      renderSearch(id)
+      input.focus()
+    }
+  }
+  $('serverSearch').onkeydown = (event) => {
+    if (event.key !== 'Enter' || event.isComposing || searches.serverSearch.composing || busy || !snapshot) return
+    event.preventDefault()
+    const query = $('serverSearch').value.trim()
+    clearTimeout(searches.serverSearch.timer)
+    Object.assign(searches.serverSearch, { query, pending: false })
+    renderServers()
+    if (query && !matchingServers(query).length) editServer()
+  }
+  function renderEditorSave() {
+    $('saveEditor').disabled = busy || !$('serverHost').value.trim() || !$('serverName').value.trim()
+  }
+  $('serverHost').oninput = renderEditorSave
+  $('serverName').oninput = renderEditorSave
+  $('closeEditor').onclick = () => $('editor').close()
+  async function saveServer(remove = false) {
+    try {
+      const creating = editingHost === null
+      const servers = snapshot.servers.filter((server) => server.host !== editingHost)
+      let selectHost
+      let savedHost
+      if (!remove) {
+        const host = $('serverHost').value.trim()
+        const value = { host, name: $('serverName').value.trim() }
+        const index = snapshot.servers.findIndex((server) => server.host === editingHost)
+        servers.splice(index < 0 ? servers.length : index, 0, value)
+        savedHost = inputIp(host) || host.toLowerCase()
+        if (creating || editingHost === selectedHost) selectHost = savedHost
+      }
+      await request({ action: 'saveServers', servers, ...(selectHost ? { selectHost } : {}) })
+      if (!remove) {
+        resetSearch('serverSearch')
+        locatedHost = savedHost
+        locateAfterLoad = false
+      }
+      $('deleteConfirmation').close()
+      $('editor').close()
+      await load(false, true)
+      if (!remove) requestAnimationFrame(() => centerListItem($('servers'),
+        [...$('servers').querySelectorAll('.server')].find((item) => item.dataset.host === savedHost)))
+      notice('')
+    } catch (error) {
+      notice(error.message)
+    }
+  }
+  $('saveEditor').onclick = () => {
+    if ($('serverHost').reportValidity() && $('serverName').reportValidity())
+      action(() => saveServer())
+  }
+  $('serverForm').onkeydown = (event) => {
+    if (event.key === 'Enter' && !event.isComposing && event.target.tagName === 'INPUT') {
+      event.preventDefault()
+      $('saveEditor').click()
+    }
+  }
+  $('deleteServer').prepend(icon('trash'))
+  $('deleteServer').onclick = () => {
+    $('deleteConfirmation').showModal()
+    schedulePickerSize()
+    $('cancelDelete').focus()
+  }
+  $('cancelDelete').onclick = () => $('deleteConfirmation').close()
+  $('confirmDelete').onclick = () => action(() => saveServer(true))
+  for (const id of ['editor', 'deleteConfirmation']) {
+    $(id).addEventListener('cancel', (event) => { if (busy) event.preventDefault() })
+    $(id).addEventListener('close', schedulePickerSize)
+  }
+  function renderServerCheck() {
+    const button = $('checkServers'), checking = snapshot?.checkingServers
+    button.disabled = Boolean(checking || checksPending)
+    button.setAttribute('aria-busy', String(Boolean(checking)))
+    button.title = checking ? '正在检测服务器' : '重新检测服务器'
+    const symbol = icon(checking ? 'loading' : 'refresh')
+    if (checking) symbol.classList.add('loading')
+    button.replaceChildren(symbol)
+  }
+  async function checkServers(refresh = false) {
+    if (!snapshot || !listExpanded.bff || checksPending) return
+    checksPending = true
+    renderServerCheck()
+    try {
+      Object.assign(snapshot, await request({ action: refresh ? 'checkServers' : 'serverChecks' }))
+      renderServers()
+    } catch (error) { notice(error.message) }
+    finally { checksPending = false; renderServerCheck() }
+  }
+  $('checkServers').onclick = () => checkServers(true)
+  setInterval(() => {
+    if (panelVisible && !document.hidden && snapshot?.checkingServers) void checkServers()
+  }, 1000)
+  function renderPicker() {
+    if (!presentation || !$('listToggle')) return
+    const expanded = listExpanded[presentation]
+    const configuring = presentation === 'bff' && !$('bff-advanced').hidden
+    const run = snapshot?.runs?.[presentation]
+    const active = run && !finished.has(run.state)
+    const list = presentation === 'bff' ? $('servers') : $('moduleBrowser')
+    list.hidden = !expanded || configuring
+    $(presentation + '-section').querySelector('.picker-tools').hidden = !expanded || configuring
+    $('product').hidden = presentation === 'fe' && !expanded
+    const toggle = $('listToggle')
+    toggle.hidden = !active || configuring
+    toggle.disabled = busy || !snapshot
+    toggle.setAttribute('aria-expanded', String(expanded))
+    toggle.title = expanded ? '收起列表' : '展开列表'
+    toggle.setAttribute('aria-label', toggle.title)
+    toggle.replaceChildren(icon(expanded ? 'up' : 'down'))
+    const summary = $('pickerSummary')
+    const scrollTop = summary.scrollTop
+    summary.hidden = expanded || configuring
+    summary.replaceChildren()
+    if (active) {
+      const values = presentation === 'bff' ? run.host ? [run.host] : [] : run.apps || []
+      if (values.length) {
+        const tags = text('ul', '', 'picker-tags')
+        tags.setAttribute('aria-label', presentation === 'bff' ? '后端服务器' : '启动模块')
+        tags.append(...values.map((value) => text('li', value, 'badge')))
+        summary.append(tags)
+      }
+    } else if (!snapshot && busy) summary.textContent = '正在读取启动状态…'
+    summary.scrollTop = scrollTop
+    schedulePickerSize()
+  }
+  function schedulePickerSize() {
+    if (!presentation || pickerFrame) return
+    pickerFrame = requestAnimationFrame(() => {
+      pickerFrame = 0
+      const list = presentation === 'bff' ? $('servers') : $('moduleBrowser')
+      if (!list) return
+      const configuring = presentation === 'bff' && !$('bff-advanced').hidden
+      const content = configuring ? $('bff-environment-fields') : list.hidden ? $('pickerSummary') : list
+      const viewport = list.hidden || presentation === 'bff' ? content : $('modules')
+      const scrollTop = viewport.scrollTop
+      const main = document.querySelector('main')
+      content.style.height = 'auto'
+      const natural = content.getBoundingClientRect().height
+      const chrome = main.getBoundingClientRect().height - natural
+      content.style.height = presentation === 'bff' && (configuring || !list.hidden)
+        ? Math.max(40, Math.min(400, maxPanelHeight - chrome)) + 'px'
+        : Math.max(list.hidden ? 0 : 40, Math.min(natural, 400, maxPanelHeight - chrome)) + 'px'
+      viewport.scrollTop = scrollTop
+      const dialogs = [...document.querySelectorAll('dialog[open]')]
+      const height = Math.max(main.getBoundingClientRect().height,
+        ...dialogs.map((dialog) => dialog.scrollHeight + 34))
+      parent.postMessage({ type: 'orca-panel-height', height: Math.ceil(Math.min(height, maxPanelHeight)) }, '*')
+    })
+  }
+  window.addEventListener('resize', schedulePickerSize)
+  function refreshStatus() {
+    if (!snapshot || busy || !panelVisible || document.hidden || statusPending) return
+    statusPending = true
+    request({ action: 'status' })
+      .then((runs) => {
+        const completed = Object.entries(runs).some(
+          ([kind, run]) =>
+            run?.operation === 'install' &&
+            finished.has(run.state) &&
+            snapshot.runs[kind] &&
+            !finished.has(snapshot.runs[kind].state)
+        )
+        snapshot.runs = runs
+        lastStatusError = ''
+        renderRuns()
+        if (completed || needsListExpansion()) action(() => load(true, true))
+      })
+      .catch((error) => {
+        if (lastStatusError !== error.message) notice(error.message)
+        lastStatusError = error.message
+      })
+      .finally(() => { statusPending = false })
+  }
+  setInterval(refreshStatus, 4000)
+  if (presentation) {
+    const section = $(presentation + '-section')
+    const header = section.querySelector('.toolbar')
+    header.classList.add('popover-header')
+    const tools = text('div', '', 'picker-tools')
+    if (presentation === 'fe') tools.append($('selectAll'), $('locateSelected'))
+    else tools.append($('locateServer'), $('checkServers'))
+    tools.append($(presentation === 'bff' ? 'serverSearch' : 'search').closest('.search-field'))
+    header.append(tools)
+    const summary = text('div', '', 'picker-summary')
+    summary.id = 'pickerSummary'
+    header.after(summary)
+    const list = presentation === 'bff' ? $('servers') : $('modules').parentElement
+    list.classList.add('picker-list')
+    list.id = presentation === 'bff' ? 'servers' : 'moduleBrowser'
+    const footer = text('div', '', 'popover-footer')
+    const controls = text('div', '', 'popover-actions')
+    const toggle = text('button', '', 'quiet icon-button list-toggle')
+    toggle.id = 'listToggle'
+    toggle.setAttribute('aria-controls', list.id)
+    toggle.onclick = () => {
+      if (listExpanded[presentation]) {
+        listExpanded[presentation] = false
+        $(presentation === 'bff' ? 'servers' : 'modules').replaceChildren()
+        renderPicker()
+      } else {
+        locateAfterLoad = true
+        action(() => load(true, true))
+      }
+    }
+    if (presentation === 'bff') controls.append($('advanced-bff'))
+    controls.append(toggle)
+    if (presentation === 'fe') controls.append($('product'))
+    const actions = text('div', '', 'service-actions')
+    if (presentation === 'fe') actions.append($('open-fe'))
+    actions.append($('restart-' + presentation), $('toggle-' + presentation))
+    controls.append(actions)
+    footer.append($(presentation + '-info'), controls)
+    section.append(footer)
+    section.querySelector('.product-controls').remove()
+    const emptyRow = header.querySelector('.row')
+    if (emptyRow && !emptyRow.children.length) emptyRow.remove()
+    renderPicker()
+  }
+  action(() => load(Boolean(presentation)))
+</script>

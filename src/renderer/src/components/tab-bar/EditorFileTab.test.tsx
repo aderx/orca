@@ -61,6 +61,10 @@ vi.mock('@dnd-kit/sortable', () => ({
   })
 }))
 
+vi.mock('../plugin-workspace/WorkspacePluginTabIcon', () => ({
+  WorkspacePluginTabIcon: () => null
+}))
+
 vi.mock('lucide-react', () => ({
   ArrowDown: function ArrowDown(props: Record<string, unknown>) {
     return { type: 'ArrowDown', props }

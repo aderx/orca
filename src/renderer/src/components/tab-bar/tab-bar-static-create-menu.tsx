@@ -1,4 +1,5 @@
 import React from 'react'
+import { WorkspacePluginButton } from '../plugin-workspace/WorkspacePluginButton'
 import { FilePlus, FileText, Globe, Smartphone, TerminalSquare } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
@@ -184,6 +185,7 @@ export function TabBarStaticCreateMenu({
       {openMarkdownMenuItem}
       {defaultTerminalMenuItems}
       {newBrowserMenuItem}
+      {!terminalOnly && <WorkspacePluginButton worktreeId={props.worktreeId} presentation="menu" />}
       {newSimulatorMenuItem}
       {mobileEmulatorIntroMenuBlock}
     </>
@@ -191,6 +193,7 @@ export function TabBarStaticCreateMenu({
     <>
       {defaultTerminalMenuItems}
       {newBrowserMenuItem}
+      {!terminalOnly && <WorkspacePluginButton worktreeId={props.worktreeId} presentation="menu" />}
       {newMarkdownMenuItem}
       {openMarkdownMenuItem}
       {newSimulatorMenuItem}

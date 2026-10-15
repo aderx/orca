@@ -13,6 +13,9 @@ import { z } from 'zod'
  */
 
 export const PLUGIN_CAPABILITY_KINDS = [
+  'commands:invoke',
+  'terminal:manage',
+  'browser:open',
   'workspace:read',
   'terminal:send',
   'notifications:show',
@@ -33,6 +36,9 @@ export type PluginCapability = z.infer<typeof pluginCapabilitySchema>
 /** Plain-language consent copy per capability. Shown verbatim in the install
  *  preview / consent dialog; keep each line honest about what is enforced. */
 export const PLUGIN_CAPABILITY_DESCRIPTIONS: Record<PluginCapabilityKind, string> = {
+  'commands:invoke': 'Call this plugin’s declared worker commands from its panel',
+  'terminal:manage': 'Create native terminals and reveal terminals created by this plugin',
+  'browser:open': 'Open HTTP or HTTPS pages in new browser tabs of your focused worktree',
   'workspace:read': 'Read the name, branch, and terminal list of your focused worktree',
   'terminal:send': 'Type text into a terminal you can see (always a specific terminal)',
   'notifications:show': 'Show desktop notifications labeled with the plugin name',
