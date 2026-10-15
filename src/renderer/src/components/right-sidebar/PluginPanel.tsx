@@ -1,4 +1,6 @@
+import type { PluginWorkspaceContext } from '../plugin-workspace/plugin-workspace-context'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { isPluginPanelTabKey } from '../../../../shared/plugins/plugin-manifest'
 import {
   PANEL_PING_TYPE,
@@ -20,6 +22,12 @@ import { translate } from '@/i18n/i18n'
 
 type PluginPanelProps = {
   tabKey: string
+  workspaceContext?: PluginWorkspaceContext
+  isVisible?: boolean
+  presentation?: string
+  onDismiss?: () => void
+  onContentHeight?: (height: number) => void
+  contentHeight?: number
 }
 
 type PluginPanelEntryState =
@@ -36,16 +44,37 @@ function PluginPanelMessage({ children }: { children: React.ReactNode }): React.
   )
 }
 
+function showPanelError(message: string): void {
+  const summary = message.replace(/^Error:\s*/, '').split(/\n\s*at\s/)[0].slice(0, 1000)
+  toast.error(summary, { id: `plugin-panel:${summary}` })
+}
+
 /** Fills the shell placeholders main cannot know (theme class + token
  *  values). First-occurrence replace: the prelude parses before any plugin
  *  content, so a plugin echoing the placeholder string is inert. */
-function fillPanelShell(html: string): string {
-  return html
+function fillPanelShell(html: string, presentation?: string): string {
+  const document = html
     .replace(PANEL_SHELL_COLOR_SCHEME_PLACEHOLDER, currentPanelColorScheme())
     .replace(PANEL_SHELL_TOKENS_PLACEHOLDER, buildPanelDesignTokenCss())
+  if (!presentation) return document
+  const attribute = presentation
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+  // Presentation must exist before the plugin's first paint, even while its data is loading.
+  return document.replace('<html ', `<html data-orca-presentation="${attribute}" `)
 }
 
-function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
+function PluginPanel({
+  tabKey,
+  workspaceContext,
+  isVisible = true,
+  presentation,
+  onDismiss,
+  onContentHeight,
+  contentHeight
+}: PluginPanelProps): React.JSX.Element {
   const panels = usePluginPanels()
   const setPanelHealth = usePluginPanelsStore((state) => state.setPanelHealth)
   const panel = isPluginPanelTabKey(tabKey)
@@ -60,12 +89,12 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
   const pluginKey = panel?.pluginKey ?? null
   const panelId = panel?.id ?? null
   const panelShell = entryState.status === 'ready' ? entryState.shellHtml : null
-  const panelDocument = panelShell ? fillPanelShell(panelShell) : null
+  const panelDocument = panelShell ? fillPanelShell(panelShell, presentation) : null
   // Why: the shell bakes Orca's color scheme + design tokens into srcdoc, so the
   // frame must be rebuilt when the app theme changes, not only when the document does.
   const panelFrameKey =
     entryState.status === 'ready'
-      ? `${tabKey}:${entryState.documentRevision}:${themeRevision}`
+      ? `${tabKey}:${entryState.documentRevision}:${themeRevision}:${presentation ?? ''}`
       : null
   const watchdog = useMemo(
     () =>
@@ -88,7 +117,36 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
     const handler = createPanelBridgeMessageHandler({
       sessionToken,
       getPanelWindow: () => iframeRef.current?.contentWindow ?? null,
-      callPanelAction: callPanelActionViaPreload,
+      callPanelAction: (call) => {
+        if (call.action !== 'commands.invoke' || !call.params || typeof call.params !== 'object') {
+          return callPanelActionViaPreload(call)
+        }
+        const params = call.params
+        const args =
+          'args' in params && params.args && typeof params.args === 'object' ? params.args : {}
+        // Bind delayed requests to this tab, never to whichever worktree is focused later.
+        const operation = 'action' in args ? args.action : null
+        const reportAfterDismiss = (message: string): void => {
+          if (!active && (operation === 'start' || operation === 'restart')) showPanelError(message)
+        }
+        return callPanelActionViaPreload({
+          ...call,
+          params: {
+            ...params,
+            args: {
+              ...args,
+              context: workspaceContext ?? null,
+              ...(presentation === undefined ? {} : { presentation })
+            }
+          }
+        }).then((outcome) => {
+          if (!outcome.ok) reportAfterDismiss(outcome.error)
+          return outcome
+        }).catch((error: unknown) => {
+          reportAfterDismiss(error instanceof Error ? error.message : String(error))
+          throw error
+        })
+      },
       isActive: () => active,
       onPong: (pingId) => watchdog.handlePong(pingId)
     })
@@ -97,17 +155,41 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
       active = false
       window.removeEventListener('message', handler)
     }
-  }, [panelDocument, sessionToken, watchdog])
+  }, [panelDocument, sessionToken, watchdog, workspaceContext, presentation])
+
+  useEffect(() => {
+    const dismiss = (event: MessageEvent): void => {
+      if (event.source !== iframeRef.current?.contentWindow) return
+      const data = event.data
+      if (data?.type === 'orca-panel-dismiss') onDismiss?.()
+      if (data?.type === 'orca-panel-notice' && typeof data.message === 'string' &&
+        data.message.length > 0 && data.message.length <= 1000) showPanelError(data.message)
+      if (data?.type === 'orca-panel-height' && Number.isFinite(data.height) &&
+        data.height >= 80 && data.height <= 1200 && onContentHeight) {
+        onContentHeight(Math.ceil(data.height))
+        iframeRef.current?.contentWindow?.postMessage({
+          type: 'orca-panel-height-limit', height: Math.max(80, window.innerHeight - 80)
+        }, '*')
+      }
+    }
+    window.addEventListener('message', dismiss)
+    return () => window.removeEventListener('message', dismiss)
+  }, [onDismiss, onContentHeight])
 
   useEffect(() => {
     if (!panelFrameKey || loadedFrameKey !== panelFrameKey) {
       return
     }
+    iframeRef.current?.contentWindow?.postMessage(
+      { type: 'orca-panel-visibility', visible: isVisible },
+      '*'
+    )
+    if (!isVisible) return
     // The srcdoc prelude must install its pong listener before the first ping;
     // otherwise a healthy panel can lose the startup ping and be suspended.
     watchdog.start()
     return () => watchdog.stop()
-  }, [loadedFrameKey, panelFrameKey, watchdog])
+  }, [isVisible, loadedFrameKey, panelFrameKey, watchdog])
 
   useEffect(() => {
     if (!pluginKey || !panelId) {
@@ -228,7 +310,13 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
       srcDoc={panelDocument ?? ''}
       onLoad={() => setLoadedFrameKey(panelFrameKey)}
       title={panel.title}
-      className="h-full w-full flex-1 border-0 bg-background"
+      className={contentHeight === undefined
+        ? 'h-full min-h-0 w-full min-w-0 flex-1 border-0 bg-background'
+        : 'min-h-0 w-full min-w-0 shrink-0 border-0 bg-background'}
+      style={contentHeight === undefined ? undefined : {
+        height: contentHeight,
+        maxHeight: 'calc(100vh - 82px)'
+      }}
     />
   )
 }

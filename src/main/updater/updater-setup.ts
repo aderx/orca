@@ -21,6 +21,7 @@ import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { AUTO_UPDATE_CHECK_INTERVAL_MS } from './updater-state'
 import { UpdaterDownloadInstall } from './updater-download-install'
 import type { PreQuitCleanupFailureMode, UpdateInstallMode } from './updater-state'
+import { AUTOMATIC_UPDATES_ENABLED } from './updater-policy'
 
 export type UpdaterSetupOptions = {
   getLastUpdateCheckAt?: () => number | null
@@ -152,7 +153,9 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     // Why: supervised serve installs require an explicit handoff; ordinary service quits must never install implicitly.
     // Only an explicit AppImage/non-root marker may opt into electron-updater's implicit quit install.
     autoUpdater.autoInstallOnAppQuit =
-      this.updateInstallMode === 'interactive' && getLinuxPackageType() === 'non-root'
+      AUTOMATIC_UPDATES_ENABLED &&
+      this.updateInstallMode === 'interactive' &&
+      getLinuxPackageType() === 'non-root'
     // Why: MacUpdater ignores quitAndInstall arguments; the surviving CLI supervisor must be the only serve relaunch owner.
     autoUpdater.autoRunAppAfterInstall = this.updateInstallMode === 'interactive'
     // Why: our only on-machine window into electron-updater; otherwise an unexpected update-not-available or failed fetch is invisible.

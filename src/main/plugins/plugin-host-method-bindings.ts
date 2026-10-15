@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import {
   getPluginHostMethodSpec,
   PLUGIN_HOST_API_V0,
@@ -17,6 +18,15 @@ export type PluginWorktreeContext = {
 /** Structural service surface the facade delegates to. Desktop main binds it
  *  over runtime services; relay policy and conformance tests bind fakes. */
 export type PluginHostServices = {
+  openBrowser?(input: { worktreeId: string; url: string }): Promise<{ browserPageId: string }>
+  invokeOwnCommand?(pluginId: string, commandId: string, args: unknown): Promise<unknown>
+  createOwnedTerminal?(
+    pluginId: string,
+    input: { worktreeId: string; command: string; title: string }
+  ): Promise<{ handle: string }>
+  focusOwnedTerminal?(pluginId: string, terminalId: string): Promise<{ ok: true }>
+  closeOwnedTerminal?(pluginId: string, terminalId: string): Promise<{ ok: true }>
+
   resolveActiveWorktreeContext(): Promise<PluginWorktreeContext | null>
   listWorktreeTerminals(worktreeId: string): Promise<{ id: string }[]>
   sendTerminalText(
@@ -69,6 +79,33 @@ function definePluginMethod(
 }
 
 const HANDLERS = new Map<string, BoundPluginHostMethod>([
+  definePluginMethod('commands.invoke', async (params, { pluginId, services }) => {
+    const input = z.object({ commandId: z.string(), args: z.unknown().optional() }).parse(params)
+    if (!services.invokeOwnCommand) throw new Error('Plugin worker commands unavailable')
+    return (await services.invokeOwnCommand(pluginId, input.commandId, input.args)) ?? null
+  }),
+  definePluginMethod('browser.open', async (params, { services }) => {
+    const input = z.object({ worktreeId: z.string(), url: z.string() }).parse(params)
+    if (!services.openBrowser) throw new Error('Plugin browser opening unavailable')
+    return services.openBrowser(input)
+  }),
+  definePluginMethod('terminal.create', async (params, { pluginId, services }) => {
+    const input = z
+      .object({ worktreeId: z.string(), command: z.string(), title: z.string() })
+      .parse(params)
+    if (!services.createOwnedTerminal) throw new Error('Plugin terminal creation unavailable')
+    return services.createOwnedTerminal(pluginId, input)
+  }),
+  definePluginMethod('terminal.focusOwned', async (params, { pluginId, services }) => {
+    const input = z.object({ terminalId: z.string() }).parse(params)
+    if (!services.focusOwnedTerminal) throw new Error('Plugin terminal focus unavailable')
+    return services.focusOwnedTerminal(pluginId, input.terminalId)
+  }),
+  definePluginMethod('terminal.closeOwned', async (params, { pluginId, services }) => {
+    const input = z.object({ terminalId: z.string() }).parse(params)
+    if (!services.closeOwnedTerminal) throw new Error('Plugin terminal close unavailable')
+    return services.closeOwnedTerminal(pluginId, input.terminalId)
+  }),
   definePluginMethod('workspace.readContext', async (_params, { services }) => {
     const context = await services.resolveActiveWorktreeContext()
     if (!context) {

@@ -1,0 +1,60 @@
+{
+  "manifestVersion": 1,
+  "publisher": "local",
+  "id": "zstack-launcher",
+  "name": "ZStack 服务启动器",
+  "version": "0.1.0",
+  "description": "本机 worktree 的 BFF / FE 配置、原生终端启动和完整日志。需要 Orca 本地扩展版。",
+  "engines": {
+    "orca": ">=1.4.197"
+  },
+  "pluginApi": 1,
+  "main": "main.mjs",
+  "capabilities": [
+    {
+      "kind": "storage"
+    },
+    {
+      "kind": "commands:invoke"
+    },
+    {
+      "kind": "terminal:manage"
+    },
+    {
+      "kind": "browser:open"
+    },
+    {
+      "kind": "workspace:read"
+    },
+    {
+      "kind": "terminal:send"
+    }
+  ],
+  "contributes": {
+    "panels": [
+      {
+        "id": "services",
+        "title": "服务",
+        "icon": "Plug",
+        "entry": "panel.html"
+      }
+    ],
+    "commands": [
+      {
+        "id": "workspace-panel.services.toolbar",
+        "title": "服务快捷入口与状态",
+        "context": "worktree"
+      },
+      {
+        "id": "workspace-panel.services.probe",
+        "title": "识别服务工作树",
+        "context": "worktree"
+      },
+      {
+        "id": "launcher.request",
+        "title": "服务启动器",
+        "context": "worktree"
+      }
+    ]
+  }
+}

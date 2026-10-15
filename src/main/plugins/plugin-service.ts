@@ -1,3 +1,4 @@
+import { PluginOwnedTerminals } from './plugin-owned-terminals'
 import type { PluginEventName } from '../../shared/plugins/plugin-manifest'
 import {
   capabilityKinds,
@@ -40,6 +41,7 @@ export type { PluginLogLine } from './plugin-log-buffer'
 export type { PluginServiceOptions } from './plugin-service-options'
 
 export class PluginService {
+  private readonly ownedTerminals = new PluginOwnedTerminals()
   readonly options: PluginServiceOptions
   private readonly registry = createPluginExtensionRegistry()
   private readonly eventBus = new PluginEventBus()
@@ -260,7 +262,22 @@ export class PluginService {
           ? bindPluginHostServices({
               delegate: this.runtimeDelegate,
               pluginsDataDir: getPluginsDataDir(this.options.userDataPath),
-              subscribeEvents: (key, events) => this.eventBus.subscribe(key, events)
+              subscribeEvents: (key, events) => this.eventBus.subscribe(key, events),
+              extensions: {
+                invokeOwnCommand: (key, id, args) => this.invokeCommand(key, id, args),
+                createOwnedTerminal: (key, input) => {
+                  if (!this.runtimeDelegate) throw new Error('Runtime unavailable')
+                  return this.ownedTerminals.create(this.runtimeDelegate, key, input)
+                },
+                focusOwnedTerminal: (key, id) => {
+                  if (!this.runtimeDelegate) throw new Error('Runtime unavailable')
+                  return this.ownedTerminals.focus(this.runtimeDelegate, key, id)
+                },
+                closeOwnedTerminal: (key, id) => {
+                  if (!this.runtimeDelegate) throw new Error('Runtime unavailable')
+                  return this.ownedTerminals.close(this.runtimeDelegate, key, id)
+                }
+              }
             })
           : null,
         audit: this.audit

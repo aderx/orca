@@ -13,6 +13,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import TabBar from '../tab-bar/TabBar'
 
 import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
+import { WorkspacePluginToolbar } from '../plugin-workspace/WorkspacePluginToolbar'
+import { WorkspaceEmptyState } from '../plugin-workspace/WorkspaceEmptyState'
 import { useTabGroupWorkspaceModel } from './useTabGroupWorkspaceModel'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
@@ -27,6 +29,11 @@ import { resolveClientHostedBrowserRowStripGroupId } from '../tab-bar/client-hos
 import { useEditorGroupFileDropOwner } from '../editor/use-editor-group-file-drop-owner'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
+const PluginWorkspacePanel = lazy(() =>
+  import('../plugin-workspace/PluginWorkspacePanel').then((module) => ({
+    default: module.PluginWorkspacePanel
+  }))
+)
 const EMPTY_GROUPS: readonly TabGroup[] = []
 const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
 
@@ -84,6 +91,12 @@ export default function TabGroupPanel({
     tabBarOrder,
     terminalTabs
   } = model
+  const pluginTabs = editorItems.flatMap((item) =>
+    item.mode === 'plugin-panel' && item.pluginPanel
+      ? [{ id: item.tabId, tabKey: item.pluginPanel.tabKey, worktreeId: item.worktreeId }]
+      : []
+  )
+  const activePluginTab = pluginTabs.some((tab) => tab.id === activeTab?.id)
   // Why: one strip owns the worktree's client-hosted rows, or every split repeats them.
   const ownsClientHostedRows = useAppStore(
     (state) =>
@@ -300,7 +313,10 @@ export default function TabGroupPanel({
             >
               <div className={focusedActionChromeClassName}>
                 {isFocused ? (
-                  <TabBarQuickCommandsButton worktreeId={worktreeId} groupId={groupId} />
+                  <>
+                    <TabBarQuickCommandsButton worktreeId={worktreeId} groupId={groupId} />
+                    <WorkspacePluginToolbar worktreeId={worktreeId} />
+                  </>
                 ) : null}
                 {isFocused && hasSplitGroups ? (
                   <Tooltip>
@@ -377,7 +393,11 @@ export default function TabGroupPanel({
             data-contextual-tour-target="workspace-agent-terminal-tip"
           />
         ) : null}
+        {model.groupTabs.length === 0 && clientHostedRows.length === 0 ? (
+          <WorkspaceEmptyState onNewTerminal={commands.newTerminalTab} />
+        ) : null}
         {activeTab &&
+          !activePluginTab &&
           activeTab.contentType !== 'terminal' &&
           activeTab.contentType !== 'agent-session' &&
           activeTab.contentType !== 'browser' &&
@@ -405,6 +425,29 @@ export default function TabGroupPanel({
               </Suspense>
             </div>
           )}
+
+        {/* Plugin documents keep local state until their tab closes; never-opened tabs stay idle. */}
+        {pluginTabs.map((tab) => {
+          const visible = isVisible && activeTab?.id === tab.id
+          return (
+            <div
+              key={tab.id}
+              data-plugin-workspace-tab={tab.id}
+              data-visible={visible}
+              inert={!visible}
+              aria-hidden={!visible}
+              className="absolute inset-0 min-h-0 min-w-0 data-[visible=true]:flex data-[visible=false]:hidden"
+            >
+              <Suspense fallback={null}>
+                <PluginWorkspacePanel
+                  tabKey={tab.tabKey}
+                  worktreeId={tab.worktreeId}
+                  isVisible={visible}
+                />
+              </Suspense>
+            </div>
+          )
+        })}
 
         {/* Why: terminal/browser/simulator/structured-chat panes render at the worktree level; tab activation only changes overlay visibility and never remounts a live surface. */}
       </div>

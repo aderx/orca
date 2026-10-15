@@ -11,6 +11,7 @@ import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-che
 import { GeneralRemoteServerUpdates } from './GeneralRemoteServerUpdates'
 import { ReleaseChannelSection } from './ReleaseChannelSection'
 import { getReleaseNotesUrlForVersion } from '../../../../shared/release-channel'
+import { buildVersion } from '../../../../../package.json'
 
 export function GeneralUpdateSettingsSection(): React.JSX.Element {
   const updateStatus = useAppStore((s) => s.updateStatus)
@@ -76,6 +77,7 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
             { value0: appVersion ?? '...' }
           )}
         />
+        {buildVersion && <p className="mt-1 text-xs text-muted-foreground">构建版本：{buildVersion}</p>}
       </div>
 
       <SearchableSetting

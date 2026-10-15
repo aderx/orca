@@ -1,4 +1,5 @@
 import type { PluginEventName } from '../../shared/plugins/plugin-manifest'
+import type { RuntimeTerminalClose } from '../../shared/runtime-types'
 import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../shared/plugins/plugin-host-api'
 import type { PluginHostServices } from './plugin-host-methods'
 import { PluginSecretsStore } from './plugin-secrets-store'
@@ -7,6 +8,19 @@ import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 
 /** Structural subset of OrcaRuntimeService exposed to plugin facade bindings. */
 export type PluginRuntimeDelegate = {
+  browserTabCreate?(params: {
+    worktree: string
+    url: string
+    activate: boolean
+    waitForRegistration: boolean
+  }): Promise<{ browserPageId: string }>
+  createTerminal?(
+    selector: string,
+    options: { command: string; title: string; focus: boolean; rendererBacked: boolean }
+  ): Promise<{ handle: string }>
+  focusTerminal?(handle: string): Promise<unknown>
+  closeTerminal?(handle: string): Promise<RuntimeTerminalClose>
+
   resolveActiveWorktreeContext(): Promise<{
     worktreeId: string
     path: string
@@ -33,10 +47,25 @@ export type PluginRuntimeDelegate = {
 export function bindPluginHostServices(input: {
   delegate: PluginRuntimeDelegate
   pluginsDataDir: string
+  extensions?: Pick<
+    PluginHostServices,
+    'invokeOwnCommand' | 'createOwnedTerminal' | 'focusOwnedTerminal' | 'closeOwnedTerminal'
+  >
   subscribeEvents: (pluginKey: string, events: PluginEventName[]) => PluginEventName[]
 }): PluginHostServices {
   const { delegate, pluginsDataDir, subscribeEvents } = input
   return {
+    ...input.extensions,
+    openBrowser: async ({ worktreeId, url }) => {
+      if (!delegate.browserTabCreate) throw new Error('This host cannot open browser tabs')
+      const context = await delegate.resolveActiveWorktreeContext()
+      if (!context || context.worktreeId !== worktreeId)
+        throw new Error('The worktree changed before opening; return to its service tab and retry')
+      // Keep delayed opens bound to the originating worktree after the focus check.
+      return delegate.browserTabCreate({
+        worktree: `id:${worktreeId}`, url, activate: true, waitForRegistration: true
+      })
+    },
     resolveActiveWorktreeContext: async () => {
       const context = await delegate.resolveActiveWorktreeContext()
       if (!context) {

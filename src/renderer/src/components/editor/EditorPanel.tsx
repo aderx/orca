@@ -1,3 +1,4 @@
+import { PluginWorkspacePanel } from '../plugin-workspace/PluginWorkspacePanel'
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
@@ -388,4 +389,16 @@ function EditorPanelInner({
   )
 }
 
-export default React.memo(EditorPanelInner)
+function EditorPanel(
+  props: React.ComponentProps<typeof EditorPanelInner>
+): React.JSX.Element | null {
+  const file = useAppStore((state) =>
+    state.openFiles.find((entry) => entry.id === (props.activeFileId ?? state.activeFileId))
+  )
+  if (file?.mode === 'plugin-panel' && file.pluginPanel) {
+    return <PluginWorkspacePanel tabKey={file.pluginPanel.tabKey} worktreeId={file.worktreeId} />
+  }
+  return <EditorPanelInner {...props} />
+}
+
+export default React.memo(EditorPanel)

@@ -121,6 +121,66 @@ const spec = <P extends z.ZodTypeAny, R extends z.ZodTypeAny>(
 
 export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
   spec({
+    name: 'commands.invoke',
+    since: '1.1',
+    scope: 'plugin-private',
+    capability: 'commands:invoke',
+    mutation: true,
+    panel: true,
+    params: z.object({ commandId: z.string().min(1).max(256), args: z.json().optional() }).strict(),
+    result: z.json()
+  }),
+  spec({
+    name: 'browser.open',
+    since: '1.1',
+    scope: 'active-worktree',
+    capability: 'browser:open',
+    mutation: true,
+    panel: false,
+    params: z.object({
+      worktreeId: z.string().min(1).max(4096),
+      url: z.string().url().max(8192).refine((value) => /^https?:\/\//i.test(value),
+        'Only HTTP(S) URLs are allowed')
+    }).strict(),
+    result: z.object({ browserPageId: z.string() }).strict()
+  }),
+  spec({
+    name: 'terminal.create',
+    since: '1.1',
+    scope: 'active-worktree',
+    capability: 'terminal:manage',
+    mutation: true,
+    panel: false,
+    params: z
+      .object({
+        worktreeId: z.string().min(1).max(4096),
+        command: z.string().min(1).max(8192),
+        title: z.string().min(1).max(256)
+      })
+      .strict(),
+    result: z.object({ handle: z.string() }).strict()
+  }),
+  spec({
+    name: 'terminal.focusOwned',
+    since: '1.1',
+    scope: 'explicit-terminal',
+    capability: 'terminal:manage',
+    mutation: true,
+    panel: false,
+    params: z.object({ terminalId: z.string().min(1).max(4096) }).strict(),
+    result: z.object({ ok: z.literal(true) }).strict()
+  }),
+  spec({
+    name: 'terminal.closeOwned',
+    since: '1.1',
+    scope: 'explicit-terminal',
+    capability: 'terminal:manage',
+    mutation: true,
+    panel: false,
+    params: z.object({ terminalId: z.string().min(1).max(4096) }).strict(),
+    result: z.object({ ok: z.literal(true) }).strict()
+  }),
+  spec({
     name: 'workspace.readContext',
     since: '1.0',
     scope: 'active-worktree',
