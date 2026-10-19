@@ -5,8 +5,8 @@
 - 版本分支 `xfu-dev/20261019.1` 从新获取的 `origin/dev`（`1bb1dabd22`）创建。修改仅涉及启动器插件、定制构建配方和说明文档，没有修改宿主公共终端 API。
 - 同类终端无法复用时先显示 toast，再为已保留的同一次运行创建新终端；新建仍失败时才终止启动。旧终端和归属校验保留。
 - BFF 高级配置新增 SSH 转发，开启后 HOST 使用 `127.0.0.1`；按所选 MN、BFF PORT 或 BASE_PORT + INSTANCE_ID 建立独立反向连接。默认密码 `password`，可在高级配置中修改，只认证一次，失败不继续准备依赖或启动 BFF。正常停止、取消、准备失败、服务退出与转发断开均清理本次连接，不修改 MN 配置。
-- `node --experimental-test-module-mocks --test plugins/zstack-launcher/launch-recovery.test.mjs` 的 6 项隔离回归通过，覆盖默认/自定义密码传递、`.env` 隔离、启动摘要快照及连接清理；开发版 CDP 本轮 7 项聚焦检查通过，覆盖 switch 排列及键盘切换、密码默认值与草稿、独立启动参数、运行标签及关闭后隐藏。此前已验证 toast 与新建终端请求顺序。启停与 SSH 使用模拟实现，没有启动真实 FE/BFF、连接 MN 或写入真实项目 `.env`。
-- 同版本反馈修订：SSH 转发使用左侧名称、右侧 switch，开启后显示默认 `password` 的密码输入。密码仅保存在插件选择及本次私有运行记录，不写入项目 `.env`。运行摘要按本次启动记录显示 MN IP、HOST、开启时的 `SSH:密码`，以及已开启的 API_INSPECTOR / INTERACTIVE_COLLECT / OPEN_PLATFORM；后续修改选择不会改变运行摘要。
+- `node --experimental-test-module-mocks --test plugins/zstack-launcher/launch-recovery.test.mjs` 的 6 项隔离回归通过；加入本地缓存与 boolean 元数据后仅复查相关 2 项，通过。开发版 CDP 已验证 switch 排列及键盘切换、密码输入、运行摘要；最新 8 项聚焦检查覆盖默认开启、本地缓存请求及恢复、底部布局、三个 boolean 草稿与禁用密码框。此前已验证 toast 与新建终端请求顺序。启停与 SSH 使用模拟实现，没有启动真实 FE/BFF、连接 MN 或写入真实项目 `.env`。
+- 同版本反馈修订：SSH 转发与默认 `password` 的密码框一起放在高级配置底部，开关左侧名称、右侧 switch，密码框紧随其后。未保存过的 SSH 状态默认开启，开关切换、密码输入完成后按 worktree / 产品缓存；关闭时保留禁用密码框。API_INSPECTOR、INTERACTIVE_COLLECT、OPEN_PLATFORM 也使用 switch。密码仅保存在插件选择及本次私有运行记录，不写入项目 `.env`。运行摘要按本次启动记录显示 MN IP、HOST、开启时的 `SSH:密码`，以及已开启的 API_INSPECTOR / INTERACTIVE_COLLECT / OPEN_PLATFORM；后续修改选择不会改变运行摘要。
 - 生产构建入口为 `node config/scripts/build-zstack-production.mjs 20261019.1`。要求 HEAD 等于新获取的 `origin/dev` 且已跟踪源码无改动；沿用当前未变动宿主产物，重新编译带构建号的 renderer 并打包 arm64。构建目录以构建号和提交短 SHA 区分，保留同版本反馈前的包与备份，并记录远端、精确提交、构建号和时间。
 
 ### 2026-10-15 远端 dev 生产构建流程

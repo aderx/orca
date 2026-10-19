@@ -314,7 +314,6 @@
     pointer-events: none; transition: transform 150ms;
   }
   .switch[aria-checked='true'] .switch-thumb { transform: translateX(16px); }
-  #ssh-password-row[hidden] { display: none; }
   .full {
     width: 100%;
   }
@@ -749,7 +748,7 @@
   let locateAfterLoad = Boolean(presentation)
   let changedApps = [], autoChanged = true
   let advancedExpanded = false, environment = null, advancedListScrollTop = 0
-  let sshForward = false, sshPassword = 'password', hostBeforeForwarding = ''
+  let sshForward = true, sshPassword = 'password', hostBeforeForwarding = ''
   const environmentValues = new Map()
   function renderAdvanced() {
     const run = snapshot?.runs?.bff
@@ -764,11 +763,26 @@
     $('bff-advanced').hidden = !configurable || !advancedExpanded
     for (const input of $('bff-environment-fields').querySelectorAll('input, textarea, button')) input.disabled = disabled
     if ($('ssh-forward')) $('ssh-forward').setAttribute('aria-checked', String(sshForward))
-    if ($('ssh-password-row')) $('ssh-password-row').hidden = !sshForward
+    if ($('ssh-password')) $('ssh-password').disabled = disabled || !sshForward
     if (sshForward) {
       if ($('environment-HOST')) $('environment-HOST').disabled = true
       if ($('detect-host')) $('detect-host').disabled = true
     }
+  }
+  function switchControl(id, label, checked, onChange) {
+    const control = text('button', '', 'switch')
+    control.type = 'button'
+    control.id = id
+    control.setAttribute('role', 'switch')
+    control.setAttribute('aria-label', label)
+    control.setAttribute('aria-checked', String(checked))
+    control.append(text('span', '', 'switch-thumb'))
+    control.onclick = () => {
+      const value = control.getAttribute('aria-checked') !== 'true'
+      control.setAttribute('aria-checked', String(value))
+      onChange(value)
+    }
+    return control
   }
   async function loadEnvironment() {
     const fields = $('bff-environment-fields')
@@ -779,21 +793,16 @@
     const forwarding = text('div', '', 'environment-group')
     const toggleRow = text('div', '', 'environment-switch')
     const toggleLabel = text('label', 'SSH 转发')
-    const toggle = text('button', '', 'switch')
-    toggle.type = 'button'
-    toggle.id = 'ssh-forward'
-    toggleLabel.htmlFor = toggle.id
-    toggle.setAttribute('role', 'switch')
-    toggle.setAttribute('aria-label', 'SSH 转发')
-    toggle.append(text('span', '', 'switch-thumb'))
-    toggle.onclick = () => {
-      sshForward = !sshForward
+    const toggle = switchControl('ssh-forward', 'SSH 转发', sshForward, checked => {
+      sshForward = checked
       const input = $('environment-HOST')
       if (sshForward) hostBeforeForwarding = input.value
       input.value = sshForward ? '127.0.0.1' : hostBeforeForwarding
       environmentValues.set('HOST', input.value)
       renderAdvanced()
-    }
+      void request({ action: 'saveSshSettings', sshForward }).catch(error => notice(error.message))
+    })
+    toggleLabel.htmlFor = toggle.id
     toggleRow.append(toggleLabel, toggle)
     const passwordRow = text('div', '', 'environment-field')
     passwordRow.id = 'ssh-password-row'
@@ -805,10 +814,12 @@
     passwordInput.spellcheck = false
     passwordInput.value = sshPassword
     passwordInput.oninput = () => { sshPassword = passwordInput.value }
+    passwordInput.onchange = () => {
+      void request({ action: 'saveSshSettings', sshPassword }).catch(error => notice(error.message))
+    }
     passwordLabel.htmlFor = passwordInput.id
     passwordRow.append(passwordLabel, passwordInput)
     forwarding.append(toggleRow, passwordRow)
-    fields.append(forwarding)
     for (const group of environment.groups) {
       const section = text('div', '', 'environment-group')
       section.append(text('h3', group.title))
@@ -817,9 +828,18 @@
         environmentValues.set(field.key, field.value)
         const row = text('div', '', 'environment-field')
         const label = text('label', field.key, 'environment-key')
-        const input = document.createElement(field.value.includes('\n') && !field.secret ? 'textarea' : 'input')
-        if (input.tagName === 'INPUT') input.type = field.secret ? 'password' : 'text'
-        input.value = field.value
+        const input = field.boolean
+          ? switchControl(`environment-${field.key}`, field.key, field.value === 'true',
+            checked => environmentValues.set(field.key, String(checked)))
+          : document.createElement(field.value.includes('\n') && !field.secret ? 'textarea' : 'input')
+        if (field.boolean) row.classList.add('environment-switch')
+        else {
+          if (input.tagName === 'INPUT') input.type = field.secret ? 'password' : 'text'
+          input.value = field.value
+          input.autocomplete = 'off'
+          input.spellcheck = false
+          input.oninput = () => environmentValues.set(field.key, input.value)
+        }
         if (field.key === 'HOST') {
           hostBeforeForwarding = field.value
           if (sshForward) input.value = '127.0.0.1'
@@ -828,10 +848,7 @@
         input.dataset.envKey = field.key
         input.id = `environment-${field.key}`
         label.htmlFor = input.id
-        input.autocomplete = 'off'
-        input.spellcheck = false
         input.setAttribute('aria-label', field.key)
-        input.oninput = () => environmentValues.set(field.key, input.value)
         let control = input
         if (field.key === 'HOST') {
           control = text('div', '', 'search-field')
@@ -863,6 +880,7 @@
       }
       fields.append(section)
     }
+    fields.append(forwarding)
     renderAdvanced()
     schedulePickerSize()
   }
@@ -915,7 +933,7 @@
     $('product').title = '启动时包含产品入口：' + entryModules().join(', ')
     selectedHost = snapshot.selection.host
     if (!environment) {
-      sshForward = snapshot.selection.sshForward === true
+      sshForward = snapshot.selection.sshForward !== false
       sshPassword = snapshot.selection.sshPassword ?? 'password'
     }
     changedApps = (snapshot.changedApps || []).filter((name) =>

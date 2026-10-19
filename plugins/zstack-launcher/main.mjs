@@ -194,6 +194,17 @@ async function snapshot(ctx, name, refresh, presentation, expanded) {
     runs
   }
 }
+function sshSettings(previous, request) {
+  const sshPassword = request.sshPassword === undefined
+    ? previous?.sshPassword ?? 'password' : request.sshPassword
+  if (typeof sshPassword !== 'string' || /[\r\n\0]/.test(sshPassword))
+    throw new Error('SSH 密码不能包含换行或空字符')
+  return {
+    sshForward: request.sshForward === undefined
+      ? previous?.sshForward !== false : request.sshForward === true,
+    sshPassword
+  }
+}
 async function saveSelection(ctx, request) {
   const service = request.kind ?? request.presentation
   const name = product(request.product)
@@ -215,17 +226,11 @@ async function saveSelection(ctx, request) {
   )
     throw new Error('后端服务器已被修改，请重新选择')
   const previous = saved.selections[`${ctx.worktreeKey}:${name}`]
-  const sshPassword = service === 'fe' || request.sshPassword === undefined
-    ? previous?.sshPassword ?? 'password' : request.sshPassword
-  if (typeof sshPassword !== 'string' || /[\r\n\0]/.test(sshPassword))
-    throw new Error('SSH 密码不能包含换行或空字符')
   saved.selections[`${ctx.worktreeKey}:${name}`] = {
     apps: service === 'bff' ? (previous?.apps ?? []) : [...new Set(request.apps)],
     autoChanged: typeof request.autoChanged === 'boolean' ? request.autoChanged : (previous?.autoChanged ?? true),
     proxy: false,
-    sshForward: service === 'fe' || request.sshForward === undefined
-      ? previous?.sshForward === true : request.sshForward === true,
-    sshPassword,
+    ...sshSettings(previous, service === 'fe' ? {} : request),
     host: service === 'fe' ? (previous?.host ?? '') : request.host || ''
   }
   await saveState(saved)
@@ -266,7 +271,7 @@ async function launch(ctx, request, install = false) {
     readinessPorts = [],
     url = null
   const bffSettings = service === 'bff' && !install
-    ? bffLaunchEnvironment(ctx, request.environment, selected.sshForward) : null
+    ? bffLaunchEnvironment(ctx, request.environment, selected.sshForward !== false) : null
   if (install) {
     if (service === 'bff') {
       ;({ program, args } = preparationCommand('cloud', ['bff']))
@@ -459,6 +464,13 @@ async function dispatch(request) {
     case 'saveSelection':
       await saveSelection(ctx, request)
       return { ok: true }
+    case 'saveSshSettings': {
+      const saved = await state(), key = `${ctx.worktreeKey}:${name}`
+      const previous = saved.selections[key] ?? { apps: [], proxy: false, host: '' }
+      saved.selections[key] = { ...previous, ...sshSettings(previous, request) }
+      await saveState(saved)
+      return { ok: true }
+    }
     case 'start': {
       if (restarting.has(`${ctx.worktreeKey}:${kind(request.kind)}`))
         throw new Error('此服务正在重启')
