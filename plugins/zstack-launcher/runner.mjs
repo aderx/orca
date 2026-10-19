@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process'
 import { atomicJson, readJson } from './data.mjs'
 import { observeServiceProcesses, stopUnusedBroker } from './service-processes.mjs'
 import { createServiceHealthObserver } from './service-health.mjs'
+import { createSshForward } from './ssh-forward.mjs'
 
 const file = process.argv[2]
 const run = readJson(file)
@@ -18,6 +19,7 @@ let heartbeat
 let monitoring = Promise.resolve()
 let observing = false
 let lastObservation = 0
+let forwarding, forwardingError
 const log = fs.openSync(run.log, 'a', 0o600)
 const output = (data) => {
   fs.writeSync(log, data)
@@ -39,6 +41,7 @@ function signalGroup(signal) {
 function stop() {
   if (stopping) return
   stopping = true
+  void forwarding?.stop()
   const wasRunning = run.state === 'running'
   update({ state: 'stopping' })
   monitoring = monitoring.then(() => wasRunning ? observeServiceProcesses(run) : undefined)
@@ -106,11 +109,22 @@ heartbeat = setInterval(() => {
 }, 500)
 try {
   if (fs.existsSync(`${file}.stop`)) stop()
+  if (!stopping && run.sshForward) {
+    output(Buffer.from(`\n[SSH] 正在连接 ${run.sshForward.host}，建立 BFF 回调转发…\n`))
+    forwarding = createSshForward(run.sshForward, {
+      env, output, onPid: sshPid => update({ sshPid }),
+      onFailure: error => { forwardingError = error; stop() }
+    })
+    await forwarding.ready
+    update({ sshConnected: true })
+  }
   let result = { code: 0, signal: null }
   if (!stopping && run.preparation) result = await executeStep(run.preparation, true)
   if (!stopping && result.code === 0) result = await executeStep(run, run.operation === 'install')
   await monitoring
+  await forwarding?.stop()
   await stopUnusedBroker(run, file)
+  if (forwardingError) throw forwardingError
   update({
     state: stopping ? 'stopped' : result.code === 0 ? 'exited' : 'failed',
     ...result,
@@ -125,10 +139,12 @@ try {
 } catch (error) {
   signalGroup('SIGKILL')
   await monitoring
+  await forwarding?.stop()
   try { await stopUnusedBroker(run, file) } catch (cleanupError) { output(Buffer.from(`\n[清理失败] ${cleanupError.message}\n`)) }
-  update({ state: 'failed', error: String(error), endedAt: Date.now() })
-  output(Buffer.from(`\n[启动失败] ${error.message}\n`))
-  process.exitCode = 1
+  const cancelled = stopping && !forwardingError
+  update({ state: cancelled ? 'stopped' : 'failed', error: cancelled ? null : error.message, endedAt: Date.now() })
+  output(Buffer.from(`\n[${cancelled ? '已停止' : '启动失败'}] ${cancelled ? '启动已取消' : error.message}\n`))
+  process.exitCode = cancelled ? 0 : 1
 } finally {
   clearInterval(heartbeat)
   clearTimeout(escalation)

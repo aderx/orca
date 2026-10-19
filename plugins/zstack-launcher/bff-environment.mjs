@@ -91,6 +91,19 @@ export function readBffEnvironment(ctx) {
 export function validateBffEnvironment(ctx, draft) {
   if (draft !== undefined) editsFor(environmentSource(ctx).text, draft)
 }
+export function bffLaunchEnvironment(ctx, draft, sshForward) {
+  const { text } = environmentSource(ctx)
+  const changes = editsFor(text, draft)
+  if (!sshForward) return { environment: draft }
+  const values = new Map(assignments(text).map(entry => [entry.key, entry.value]))
+  for (const [key, value] of changes) values.set(key, value)
+  const port = Number(values.get('PORT') ||
+    (Number(values.get('BASE_PORT') || '3100') + Number(values.get('INSTANCE_ID') || '0')))
+  if (!Number.isInteger(port) || port < 1 || port > 65535)
+    throw new Error('SSH 转发需要有效的 BFF 端口，请检查 BASE_PORT 和 INSTANCE_ID')
+  changes.set('HOST', '127.0.0.1')
+  return { environment: { revision: revision(text), changes: Object.fromEntries(changes) }, port }
+}
 export function writeBffEnvironment(ctx, host, draft) {
   const { target, text } = environmentSource(ctx)
   const entries = assignments(text), changes = editsFor(text, draft)

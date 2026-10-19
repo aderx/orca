@@ -735,6 +735,7 @@
   let locateAfterLoad = Boolean(presentation)
   let changedApps = [], autoChanged = true
   let advancedExpanded = false, environment = null, advancedListScrollTop = 0
+  let sshForward = false, hostBeforeForwarding = ''
   const environmentValues = new Map()
   function renderAdvanced() {
     const run = snapshot?.runs?.bff
@@ -748,6 +749,10 @@
     $('advanced-bff').replaceChildren(icon(advancedExpanded ? 'up' : 'down'), text('span', '高级配置'))
     $('bff-advanced').hidden = !configurable || !advancedExpanded
     for (const input of $('bff-environment-fields').querySelectorAll('input, textarea, button')) input.disabled = disabled
+    if (sshForward) {
+      if ($('environment-HOST')) $('environment-HOST').disabled = true
+      if ($('detect-host')) $('detect-host').disabled = true
+    }
   }
   async function loadEnvironment() {
     const fields = $('bff-environment-fields')
@@ -755,6 +760,24 @@
     environment = await request({ action: 'bffEnvironment' })
     environmentValues.clear()
     fields.replaceChildren()
+    const forwarding = text('div', '', 'environment-group')
+    const toggleLabel = text('label', '', 'row')
+    const toggle = document.createElement('input')
+    toggle.type = 'checkbox'
+    toggle.id = 'ssh-forward'
+    toggle.setAttribute('role', 'switch')
+    toggle.checked = sshForward
+    toggle.onchange = () => {
+      sshForward = toggle.checked
+      const input = $('environment-HOST')
+      if (sshForward) hostBeforeForwarding = input.value
+      input.value = sshForward ? '127.0.0.1' : hostBeforeForwarding
+      environmentValues.set('HOST', input.value)
+      renderAdvanced()
+    }
+    toggleLabel.append(toggle, text('span', 'SSH 转发'))
+    forwarding.append(toggleLabel, text('p', '通过所选服务器转发 BFF 回调，随服务一起停止。开启后 HOST 使用 127.0.0.1。', 'environment-description'))
+    fields.append(forwarding)
     for (const group of environment.groups) {
       const section = text('div', '', 'environment-group')
       section.append(text('h3', group.title))
@@ -766,6 +789,11 @@
         const input = document.createElement(field.value.includes('\n') && !field.secret ? 'textarea' : 'input')
         if (input.tagName === 'INPUT') input.type = field.secret ? 'password' : 'text'
         input.value = field.value
+        if (field.key === 'HOST') {
+          hostBeforeForwarding = field.value
+          if (sshForward) input.value = '127.0.0.1'
+          environmentValues.set('HOST', input.value)
+        }
         input.dataset.envKey = field.key
         input.id = `environment-${field.key}`
         label.htmlFor = input.id
@@ -855,6 +883,7 @@
     $('product').value = snapshot.product ?? currentProduct
     $('product').title = '启动时包含产品入口：' + entryModules().join(', ')
     selectedHost = snapshot.selection.host
+    if (!environment) sshForward = snapshot.selection.sshForward === true
     changedApps = (snapshot.changedApps || []).filter((name) =>
       snapshot.modules.some((module) => module.name === name && module.available && !module.isShell)
     )
@@ -1190,6 +1219,14 @@
     })
     notice('')
   }
+  async function submitService(args) {
+    const result = await request(args)
+    if (result.needsTerminal) {
+      notice(result.notice)
+      await request({ action: 'createTerminal', kind: args.kind, id: result.id })
+    }
+    if (presentation) parent.postMessage({ type: 'orca-panel-dismiss' }, '*')
+  }
   function icon(name) {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
     for (const [key, value] of Object.entries({
@@ -1291,11 +1328,9 @@
           await request({ action: 'stop', kind, id: run.id })
         } else {
           const draft = kind === 'bff' ? environmentDraft() : undefined
-          const submitted = request({ action: 'start', kind, apps: [...selected],
-            autoChanged, proxy: false, host, ...(draft ? { environment: draft } : {}) })
-          if (presentation && !draft) parent.postMessage({ type: 'orca-panel-dismiss' }, '*')
-          await submitted
-          if (presentation && draft) parent.postMessage({ type: 'orca-panel-dismiss' }, '*')
+          await submitService({ action: 'start', kind, apps: [...selected],
+            autoChanged, proxy: false, host, ...(kind === 'bff' ? { sshForward } : {}),
+            ...(draft ? { environment: draft } : {}) })
           if (kind === 'bff') snapshot.currentHost = host
           if (kind === 'bff' && !presentation && environment) await loadEnvironment()
         }
@@ -1306,11 +1341,9 @@
     }
     $('restart-' + kind).onclick = () => action(async () => {
       const draft = kind === 'bff' ? environmentDraft() : undefined
-      const submitted = request({ action: 'restart', kind, id: snapshot.runs[kind].id,
-        apps: [...selected], autoChanged, proxy: false, host: selectedHost, ...(draft ? { environment: draft } : {}) })
-      if (presentation && !draft) parent.postMessage({ type: 'orca-panel-dismiss' }, '*')
-      await submitted
-      if (presentation && draft) parent.postMessage({ type: 'orca-panel-dismiss' }, '*')
+      await submitService({ action: 'restart', kind, id: snapshot.runs[kind].id,
+        apps: [...selected], autoChanged, proxy: false, host: selectedHost,
+        ...(kind === 'bff' ? { sshForward } : {}), ...(draft ? { environment: draft } : {}) })
       if (kind === 'bff' && !presentation && environment) await loadEnvironment()
       snapshot.runs = await request({ action: 'status' })
     }, kind, 'restart')
