@@ -84,6 +84,7 @@ export function readBffEnvironment(ctx) {
       fields: group.keys.filter(key => entries.has(key) || key === 'HOST').map(key => ({
         key, value: entries.get(key)?.value ?? '',
         description: key === group.commentKey ? '' : commentBefore(text, entries.get(key)),
+        boolean: featureFlags.includes(key),
         secret: /PASSWORD|SECRET|TOKEN/.test(key)
       }))
     })).filter(group => group.fields.length)

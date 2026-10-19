@@ -65,7 +65,13 @@ test('terminal reuse failure preserves one run and continues in a new owned term
   } } })
   const context = { path: root, worktreeId: 'fixture', executionHostId: 'local' }
   const request = args => handlers.get('launcher.request')({ context, product: 'cloud', ...args })
-  const options = { kind: 'bff', apps: [], proxy: false, host: '192.0.2.2' }
+  const options = { kind: 'bff', apps: [], proxy: false, host: '192.0.2.2', sshForward: false }
+  const initialEnvironment = fs.readFileSync(path.join(bff, '.env'), 'utf8')
+  await request({ action: 'saveSshSettings', sshPassword: 'password' })
+  assert.equal(Object.values(storage.get('configuration').selections)[0].sshForward, true)
+  await request({ action: 'saveSshSettings', sshForward: false })
+  assert.equal(Object.values(storage.get('configuration').selections)[0].sshForward, false)
+  assert.equal(fs.readFileSync(path.join(bff, '.env'), 'utf8'), initialEnvironment)
   await request({ action: 'start', ...options })
   const first = (await request({ action: 'status' })).bff
   assert.equal(first.sshForward, null)
@@ -125,6 +131,12 @@ test('terminal reuse failure preserves one run and continues in a new owned term
   const status = (await request({ action: 'status' })).bff
   assert.deepEqual(status.sshForward, { password: sshPassword })
   assert.deepEqual(status.environmentSummary, { host: '127.0.0.1', flags: ['API_INSPECTOR', 'OPEN_PLATFORM'] })
+  await request({ action: 'saveSshSettings', sshForward: true, sshPassword })
+  const cached = Object.values(storage.get('configuration').selections)[0]
+  assert.equal(cached.sshForward, true)
+  assert.equal(cached.sshPassword, sshPassword)
+  assert.equal(cached.host, options.host)
+  assert.deepEqual(cached.apps, selection.apps)
 })
 
 test('forwarding enforces HOST, preserves revision checks and follows BFF port overrides', () => {
@@ -134,6 +146,8 @@ test('forwarding enforces HOST, preserves revision checks and follows BFF port o
   const file = path.join(bff, '.env'), ctx = { path: root, primary: root }
   fs.writeFileSync(file, 'HOST=192.0.2.1\nBASE_PORT=3200\nINSTANCE_ID=3\nAPI_INSPECTOR=false\nINTERACTIVE_COLLECT=true\nOPEN_PLATFORM=TRUE\n')
   const revision = readBffEnvironment(ctx).revision
+  const flags = readBffEnvironment(ctx).groups.flatMap(group => group.fields).filter(field => field.boolean)
+  assert.deepEqual(flags.map(field => field.key), ['API_INSPECTOR', 'INTERACTIVE_COLLECT', 'OPEN_PLATFORM'])
   const draft = { revision, changes: { HOST: '192.0.2.4', BASE_PORT: '3300', API_INSPECTOR: 'true' } }
   const settings = bffLaunchEnvironment(ctx, draft, true)
   assert.equal(settings.port, 3303)
