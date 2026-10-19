@@ -301,6 +301,20 @@
   .environment-field .search-field input { padding-right: 32px; }
   .environment-field textarea { height: 64px; resize: vertical; }
   .environment-field + .environment-description { margin-top: 4px; }
+  .environment-switch { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  button.switch {
+    display: inline-flex; align-items: center; flex-shrink: 0;
+    width: 36px; height: 20px; padding: 2px; border: 1px solid transparent; border-radius: 9999px;
+    background: color-mix(in srgb, var(--muted-foreground) 30%, transparent);
+    transition: background-color 150ms;
+  }
+  button.switch[aria-checked='true'] { background: var(--foreground); }
+  .switch-thumb {
+    width: 14px; height: 14px; border-radius: 9999px; background: var(--background);
+    pointer-events: none; transition: transform 150ms;
+  }
+  .switch[aria-checked='true'] .switch-thumb { transform: translateX(16px); }
+  #ssh-password-row[hidden] { display: none; }
   .full {
     width: 100%;
   }
@@ -735,7 +749,7 @@
   let locateAfterLoad = Boolean(presentation)
   let changedApps = [], autoChanged = true
   let advancedExpanded = false, environment = null, advancedListScrollTop = 0
-  let sshForward = false, hostBeforeForwarding = ''
+  let sshForward = false, sshPassword = 'password', hostBeforeForwarding = ''
   const environmentValues = new Map()
   function renderAdvanced() {
     const run = snapshot?.runs?.bff
@@ -749,6 +763,8 @@
     $('advanced-bff').replaceChildren(icon(advancedExpanded ? 'up' : 'down'), text('span', '高级配置'))
     $('bff-advanced').hidden = !configurable || !advancedExpanded
     for (const input of $('bff-environment-fields').querySelectorAll('input, textarea, button')) input.disabled = disabled
+    if ($('ssh-forward')) $('ssh-forward').setAttribute('aria-checked', String(sshForward))
+    if ($('ssh-password-row')) $('ssh-password-row').hidden = !sshForward
     if (sshForward) {
       if ($('environment-HOST')) $('environment-HOST').disabled = true
       if ($('detect-host')) $('detect-host').disabled = true
@@ -761,22 +777,37 @@
     environmentValues.clear()
     fields.replaceChildren()
     const forwarding = text('div', '', 'environment-group')
-    const toggleLabel = text('label', '', 'row')
-    const toggle = document.createElement('input')
-    toggle.type = 'checkbox'
+    const toggleRow = text('div', '', 'environment-switch')
+    const toggleLabel = text('label', 'SSH 转发')
+    const toggle = text('button', '', 'switch')
+    toggle.type = 'button'
     toggle.id = 'ssh-forward'
+    toggleLabel.htmlFor = toggle.id
     toggle.setAttribute('role', 'switch')
-    toggle.checked = sshForward
-    toggle.onchange = () => {
-      sshForward = toggle.checked
+    toggle.setAttribute('aria-label', 'SSH 转发')
+    toggle.append(text('span', '', 'switch-thumb'))
+    toggle.onclick = () => {
+      sshForward = !sshForward
       const input = $('environment-HOST')
       if (sshForward) hostBeforeForwarding = input.value
       input.value = sshForward ? '127.0.0.1' : hostBeforeForwarding
       environmentValues.set('HOST', input.value)
       renderAdvanced()
     }
-    toggleLabel.append(toggle, text('span', 'SSH 转发'))
-    forwarding.append(toggleLabel, text('p', '通过所选服务器转发 BFF 回调，随服务一起停止。开启后 HOST 使用 127.0.0.1。', 'environment-description'))
+    toggleRow.append(toggleLabel, toggle)
+    const passwordRow = text('div', '', 'environment-field')
+    passwordRow.id = 'ssh-password-row'
+    const passwordLabel = text('label', 'SSH 密码')
+    const passwordInput = document.createElement('input')
+    passwordInput.type = 'password'
+    passwordInput.id = 'ssh-password'
+    passwordInput.autocomplete = 'off'
+    passwordInput.spellcheck = false
+    passwordInput.value = sshPassword
+    passwordInput.oninput = () => { sshPassword = passwordInput.value }
+    passwordLabel.htmlFor = passwordInput.id
+    passwordRow.append(passwordLabel, passwordInput)
+    forwarding.append(toggleRow, passwordRow)
     fields.append(forwarding)
     for (const group of environment.groups) {
       const section = text('div', '', 'environment-group')
@@ -883,7 +914,10 @@
     $('product').value = snapshot.product ?? currentProduct
     $('product').title = '启动时包含产品入口：' + entryModules().join(', ')
     selectedHost = snapshot.selection.host
-    if (!environment) sshForward = snapshot.selection.sshForward === true
+    if (!environment) {
+      sshForward = snapshot.selection.sshForward === true
+      sshPassword = snapshot.selection.sshPassword ?? 'password'
+    }
     changedApps = (snapshot.changedApps || []).filter((name) =>
       snapshot.modules.some((module) => module.name === name && module.available && !module.isShell)
     )
@@ -1329,7 +1363,7 @@
         } else {
           const draft = kind === 'bff' ? environmentDraft() : undefined
           await submitService({ action: 'start', kind, apps: [...selected],
-            autoChanged, proxy: false, host, ...(kind === 'bff' ? { sshForward } : {}),
+            autoChanged, proxy: false, host, ...(kind === 'bff' ? { sshForward, sshPassword } : {}),
             ...(draft ? { environment: draft } : {}) })
           if (kind === 'bff') snapshot.currentHost = host
           if (kind === 'bff' && !presentation && environment) await loadEnvironment()
@@ -1343,7 +1377,7 @@
       const draft = kind === 'bff' ? environmentDraft() : undefined
       await submitService({ action: 'restart', kind, id: snapshot.runs[kind].id,
         apps: [...selected], autoChanged, proxy: false, host: selectedHost,
-        ...(kind === 'bff' ? { sshForward } : {}), ...(draft ? { environment: draft } : {}) })
+        ...(kind === 'bff' ? { sshForward, sshPassword } : {}), ...(draft ? { environment: draft } : {}) })
       if (kind === 'bff' && !presentation && environment) await loadEnvironment()
       snapshot.runs = await request({ action: 'status' })
     }, kind, 'restart')
@@ -1564,10 +1598,15 @@
     summary.hidden = expanded || configuring
     summary.replaceChildren()
     if (active) {
-      const values = presentation === 'bff' ? run.host ? [run.host] : [] : run.apps || []
+      const values = presentation === 'bff' ? [
+        ...(run.host ? [run.host] : []),
+        ...(run.environmentSummary ? [`HOST:${run.environmentSummary.host || '未配置'}`] : []),
+        ...(run.sshForward ? [`SSH:${run.sshForward.password}`] : []),
+        ...(run.environmentSummary?.flags || [])
+      ] : run.apps || []
       if (values.length) {
         const tags = text('ul', '', 'picker-tags')
-        tags.setAttribute('aria-label', presentation === 'bff' ? '后端服务器' : '启动模块')
+        tags.setAttribute('aria-label', presentation === 'bff' ? '后端启动配置' : '启动模块')
         tags.append(...values.map((value) => text('li', value, 'badge')))
         summary.append(tags)
       }

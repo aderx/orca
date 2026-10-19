@@ -3,12 +3,13 @@ import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { isIP } from 'node:net'
 
+const featureFlags = ['API_INSPECTOR', 'INTERACTIVE_COLLECT', 'OPEN_PLATFORM']
 const groups = [
   { title: '本机服务', commentKey: 'HOST', keys: ['HOST', 'BASE_PORT'] },
   { title: 'MySQL', commentKey: 'ZS_MYSQL_HOST', keys: ['ZS_MYSQL_PORT', 'ZS_MYSQL_USERNAME', 'ZS_MYSQL_PASSWORD'] },
   { title: 'Redis', commentKey: 'ZS_REDIS_HOST', keys: ['ZS_REDIS_HOST', 'ZS_REDIS_PORT', 'ZS_REDIS_TTL'] },
   { title: '请求设置', keys: ['ZS_ACTION_TIMEOUT'] },
-  { title: '调试与功能', keys: ['API_INSPECTOR', 'INTERACTIVE_COLLECT', 'OPEN_PLATFORM'] }
+  { title: '调试与功能', keys: featureFlags }
 ]
 const editable = new Set(groups.flatMap(group => group.keys))
 const revision = text => createHash('sha256').update(text).digest('hex')
@@ -94,15 +95,19 @@ export function validateBffEnvironment(ctx, draft) {
 export function bffLaunchEnvironment(ctx, draft, sshForward) {
   const { text } = environmentSource(ctx)
   const changes = editsFor(text, draft)
-  if (!sshForward) return { environment: draft }
   const values = new Map(assignments(text).map(entry => [entry.key, entry.value]))
   for (const [key, value] of changes) values.set(key, value)
+  const summary = {
+    host: sshForward ? '127.0.0.1' : values.get('HOST') || '',
+    flags: featureFlags.filter(key => values.get(key) === 'true')
+  }
+  if (!sshForward) return { environment: draft, summary }
   const port = Number(values.get('PORT') ||
     (Number(values.get('BASE_PORT') || '3100') + Number(values.get('INSTANCE_ID') || '0')))
   if (!Number.isInteger(port) || port < 1 || port > 65535)
     throw new Error('SSH 转发需要有效的 BFF 端口，请检查 BASE_PORT 和 INSTANCE_ID')
   changes.set('HOST', '127.0.0.1')
-  return { environment: { revision: revision(text), changes: Object.fromEntries(changes) }, port }
+  return { environment: { revision: revision(text), changes: Object.fromEntries(changes) }, port, summary }
 }
 export function writeBffEnvironment(ctx, host, draft) {
   const { target, text } = environmentSource(ctx)

@@ -39,7 +39,7 @@ test('terminal reuse failure preserves one run and continues in a new owned term
   fs.mkdirSync(path.join(root, 'scripts'))
   fs.writeFileSync(path.join(root, 'scripts/start.ts'), '')
   fs.writeFileSync(path.join(bff, 'package.json'), '{}')
-  fs.writeFileSync(path.join(bff, '.env'), 'HOST=192.0.2.1\nBASE_PORT=3100\nINSTANCE_ID=2\nZS_MN_SERVER=http://192.0.2.2:8080\n')
+  fs.writeFileSync(path.join(bff, '.env'), 'HOST=192.0.2.1\nBASE_PORT=3100\nINSTANCE_ID=2\nZS_MN_SERVER=http://192.0.2.2:8080\nAPI_INSPECTOR=true\nINTERACTIVE_COLLECT=false\nOPEN_PLATFORM=true\n')
   const handlers = new Map(), storage = new Map(), calls = []
   let mode = 'ok', createFailure = false, handle = 'terminal-0', currentFile
   activate({ commands: { register: (id, fn) => handlers.set(id, fn) }, host: { call: async (method, args) => {
@@ -67,6 +67,10 @@ test('terminal reuse failure preserves one run and continues in a new owned term
   const request = args => handlers.get('launcher.request')({ context, product: 'cloud', ...args })
   const options = { kind: 'bff', apps: [], proxy: false, host: '192.0.2.2' }
   await request({ action: 'start', ...options })
+  const first = (await request({ action: 'status' })).bff
+  assert.equal(first.sshForward, null)
+  assert.deepEqual(first.environmentSummary, { host: '192.0.2.1', flags: ['API_INSPECTOR', 'OPEN_PLATFORM'] })
+  assert.equal(Object.values(storage.get('configuration').selections)[0].sshPassword, 'password')
   const finish = async () => {
     const run = (await request({ action: 'status' })).bff
     data.atomicJson(run.file, { ...data.readJson(run.file), state: 'stopped', updatedAt: Date.now() })
@@ -100,17 +104,27 @@ test('terminal reuse failure preserves one run and continues in a new owned term
   assert.equal((await request({ action: 'status' })).bff.state, 'failed')
 
   createFailure = false
-  const forwarding = await request({ action: 'start', ...options, sshForward: true })
+  const sshPassword = "custom p@$'word"
+  const forwarding = await request({ action: 'start', ...options, sshForward: true, sshPassword })
   currentFile = (await request({ action: 'status' })).bff.file
   await request({ action: 'createTerminal', kind: 'bff', id: forwarding.id })
   const run = data.readJson(currentFile)
   assert.equal(run.sshForward.port, 3102)
   assert.equal(run.sshForward.host, options.host)
-  assert.match(fs.readFileSync(path.join(bff, '.env'), 'utf8'), /HOST=127\.0\.0\.1/)
+  assert.equal(run.sshForward.password, sshPassword)
+  const env = fs.readFileSync(path.join(bff, '.env'), 'utf8')
+  assert.match(env, /HOST=127\.0\.0\.1/)
+  assert.ok(!env.includes(sshPassword))
+  assert.doesNotMatch(env, /SSH/)
   await request({ action: 'saveSelection', kind: 'fe', apps: [], proxy: false, host: '' })
   const selection = Object.values(storage.get('configuration').selections)[0]
   assert.equal(selection.sshForward, true)
+  assert.equal(selection.sshPassword, sshPassword)
   assert.equal(selection.host, options.host)
+  await request({ action: 'saveSelection', ...options, sshForward: false, sshPassword: 'changed' })
+  const status = (await request({ action: 'status' })).bff
+  assert.deepEqual(status.sshForward, { password: sshPassword })
+  assert.deepEqual(status.environmentSummary, { host: '127.0.0.1', flags: ['API_INSPECTOR', 'OPEN_PLATFORM'] })
 })
 
 test('forwarding enforces HOST, preserves revision checks and follows BFF port overrides', () => {
@@ -118,11 +132,14 @@ test('forwarding enforces HOST, preserves revision checks and follows BFF port o
   const bff = path.join(root, 'packages/products/cloud/bff')
   fs.mkdirSync(bff, { recursive: true })
   const file = path.join(bff, '.env'), ctx = { path: root, primary: root }
-  fs.writeFileSync(file, 'HOST=192.0.2.1\nBASE_PORT=3200\nINSTANCE_ID=3\n')
+  fs.writeFileSync(file, 'HOST=192.0.2.1\nBASE_PORT=3200\nINSTANCE_ID=3\nAPI_INSPECTOR=false\nINTERACTIVE_COLLECT=true\nOPEN_PLATFORM=TRUE\n')
   const revision = readBffEnvironment(ctx).revision
-  const settings = bffLaunchEnvironment(ctx, { revision, changes: { HOST: '192.0.2.4', BASE_PORT: '3300' } }, true)
+  const draft = { revision, changes: { HOST: '192.0.2.4', BASE_PORT: '3300', API_INSPECTOR: 'true' } }
+  const settings = bffLaunchEnvironment(ctx, draft, true)
   assert.equal(settings.port, 3303)
   assert.equal(settings.environment.changes.HOST, '127.0.0.1')
+  assert.deepEqual(settings.summary, { host: '127.0.0.1', flags: ['API_INSPECTOR', 'INTERACTIVE_COLLECT'] })
+  assert.deepEqual(bffLaunchEnvironment(ctx, draft, false).summary, { host: '192.0.2.4', flags: ['API_INSPECTOR', 'INTERACTIVE_COLLECT'] })
   fs.appendFileSync(file, 'PORT=3400\n')
   assert.throws(() => bffLaunchEnvironment(ctx, settings.environment, true), /已被修改/)
   assert.equal(bffLaunchEnvironment(ctx, undefined, true).port, 3400)
@@ -137,7 +154,8 @@ async function fixture(t, mode, service = 'setInterval(() => {}, 1000)', prepara
     title: 'fixture BFF', service: 'bff', state: 'starting', createdAt: Date.now(), updatedAt: Date.now(),
     program: process.execPath, args: ['-e', `console.log('SERVICE-START'); ${service}`],
     preparation: preparation ? { program: process.execPath, args: ['-e', preparation], cwd: root } : null,
-    sshForward: { host: '192.0.2.2', port: 3100, knownHosts: path.join(root, 'known_hosts') }
+    sshForward: { host: '192.0.2.2', port: 3100, knownHosts: path.join(root, 'known_hosts'),
+      password: mode === 'port' ? undefined : "fixture p@$'word" }
   }
   data.atomicJson(file, run)
   data.atomicJson(run.lock, { id: run.id, file })
@@ -148,11 +166,12 @@ async function fixture(t, mode, service = 'setInterval(() => {}, 1000)', prepara
   const preload = path.join(root, 'mock.mjs')
   const moduleUrl = new URL('./ssh-forward.mjs', import.meta.url).href
   fs.writeFileSync(preload, `
-    import { mock } from 'node:test'; import fs from 'node:fs'; import { spawn } from 'node:child_process';
+    import { mock } from 'node:test'; import fs from 'node:fs'; import { spawn, execFileSync } from 'node:child_process';
     import { createSshForward } from ${JSON.stringify(moduleUrl)};
     mock.module(${JSON.stringify(moduleUrl)}, { namedExports: { createSshForward: (settings, options) =>
       createSshForward(settings, { ...options, spawnProcess: (program, args, opts) => {
-        fs.writeFileSync(${JSON.stringify(capture)}, JSON.stringify({program, args, askpass: opts.env.SSH_ASKPASS, mode: opts.env.SSH_ASKPASS_REQUIRE}));
+        const password = execFileSync(opts.env.SSH_ASKPASS, [], {env: opts.env, encoding: 'utf8'}).trimEnd();
+        fs.writeFileSync(${JSON.stringify(capture)}, JSON.stringify({program, args, password, mode: opts.env.SSH_ASKPASS_REQUIRE}));
         return spawn(process.execPath, ['-e', ${JSON.stringify(fake)}], opts);
       } }) } });
   `)
@@ -177,6 +196,9 @@ test('SSH authentication and forwarding failures never start dependency preparat
     assert.ok(command.args.includes('PreferredAuthentications=password'))
     assert.ok(command.args.includes('127.0.0.1:3100:127.0.0.1:3100'))
     assert.equal(command.mode, 'force')
+    assert.equal(command.password, task.run.sshForward.password ?? 'password')
+    assert.equal(command.args.includes(command.password), false)
+    assert.ok(!task.log().includes(command.password))
     assert.equal(command.args.includes('password'), false)
   }
 })
