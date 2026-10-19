@@ -15,7 +15,7 @@ if (sourceHead !== git('rev-parse', 'origin/dev')) throw new Error('Check out th
 if (git('status', '--porcelain', '--untracked-files=no')) throw new Error('Tracked source changes must be committed first')
 for (const file of ['out/main/index.js', 'out/preload/index.js', 'out/renderer/index.html'])
   if (!fs.existsSync(path.join(repo, file))) throw new Error(`Missing prepared build: ${file}`)
-const output = path.join(repo, 'dist/local-builds.noindex', `zstack-production-${buildVersion}`)
+const output = path.join(repo, 'dist/local-builds.noindex', `zstack-production-${buildVersion}-${sourceHead.slice(0, 10)}`)
 const recipe = path.join(output, 'recipe'), stage = path.join(recipe, 'stage')
 if (fs.existsSync(output)) throw new Error(`Build directory already exists: ${output}`)
 fs.mkdirSync(stage, { recursive: true })

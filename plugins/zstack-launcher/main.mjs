@@ -92,6 +92,8 @@ function runState(ctx, service) {
     product: run.product ?? (productIndex >= 0 ? run.args[productIndex + 1] : null) ?? null,
     apps: service === 'fe' && appsIndex >= 0 ? (run.args[appsIndex + 1] ?? '').split(',').filter(Boolean) : [],
     host: run.host ?? (service === 'bff' ? run.title?.match(/^BFF · (.+)$/)?.[1] : null) ?? null,
+    environmentSummary: run.environmentSummary ?? null,
+    sshForward: run.sshForward ? { password: run.sshForward.password ?? 'password' } : null,
     url: run.url ?? null,
     operation: run.operation ?? 'start',
     health: run.startedAt ? 'ready' : run.health ?? 'starting',
@@ -213,12 +215,17 @@ async function saveSelection(ctx, request) {
   )
     throw new Error('后端服务器已被修改，请重新选择')
   const previous = saved.selections[`${ctx.worktreeKey}:${name}`]
+  const sshPassword = service === 'fe' || request.sshPassword === undefined
+    ? previous?.sshPassword ?? 'password' : request.sshPassword
+  if (typeof sshPassword !== 'string' || /[\r\n\0]/.test(sshPassword))
+    throw new Error('SSH 密码不能包含换行或空字符')
   saved.selections[`${ctx.worktreeKey}:${name}`] = {
     apps: service === 'bff' ? (previous?.apps ?? []) : [...new Set(request.apps)],
     autoChanged: typeof request.autoChanged === 'boolean' ? request.autoChanged : (previous?.autoChanged ?? true),
     proxy: false,
     sshForward: service === 'fe' || request.sshForward === undefined
       ? previous?.sshForward === true : request.sshForward === true,
+    sshPassword,
     host: service === 'fe' ? (previous?.host ?? '') : request.host || ''
   }
   await saveState(saved)
@@ -317,8 +324,10 @@ async function launch(ctx, request, install = false) {
     service,
     product: name,
     host: service === 'bff' ? selected.host : null,
+    environmentSummary: bffSettings?.summary ?? null,
     sshForward: bffSettings?.port ? {
       host: selected.host, port: bffSettings.port,
+      password: selected.sshPassword ?? 'password',
       knownHosts: path.join(directory, 'ssh-known-hosts')
     } : null,
     url,

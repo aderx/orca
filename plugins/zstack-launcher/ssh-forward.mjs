@@ -19,7 +19,8 @@ export function createSshForward(settings, { env, output, onPid, onFailure, spaw
     // EOF follows runner death, so the remote session also releases its forwarding listener.
     `printf '${readyMarker}\\n'; cat >/dev/null`
   ], {
-    env: { ...env, SSH_ASKPASS_REQUIRE: 'force', SSH_ASKPASS: fileURLToPath(new URL('./ssh-askpass.sh', import.meta.url)) },
+    env: { ...env, ORCA_ZSTACK_SSH_PASSWORD: settings.password ?? 'password',
+      SSH_ASKPASS_REQUIRE: 'force', SSH_ASKPASS: fileURLToPath(new URL('./ssh-askpass.sh', import.meta.url)) },
     detached: true,
     stdio: ['pipe', 'pipe', 'pipe']
   })
