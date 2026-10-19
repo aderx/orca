@@ -1,5 +1,13 @@
 # 定制功能开发与上游升级
 
+### 2026-10-19 终端回退与 BFF SSH 转发
+
+- 版本分支 `xfu-dev/20261019.1` 从新获取的 `origin/dev`（`1bb1dabd22`）创建。修改仅涉及启动器插件、定制构建配方和说明文档，没有修改宿主公共终端 API。
+- 同类终端无法复用时先显示 toast，再为已保留的同一次运行创建新终端；新建仍失败时才终止启动。旧终端和归属校验保留。
+- BFF 高级配置新增 SSH 转发，开启后 HOST 使用 `127.0.0.1`；按所选 MN、BFF PORT 或 BASE_PORT + INSTANCE_ID 建立独立反向连接。固定开发密码只认证一次，失败不继续准备依赖或启动 BFF。正常停止、取消、准备失败、服务退出与转发断开均清理本次连接，不修改 MN 配置。
+- `node --experimental-test-module-mocks --test plugins/zstack-launcher/launch-recovery.test.mjs` 的 6 项隔离回归通过；开发版 CDP 检查覆盖开关、HOST 锁定、草稿保留、toast 与新建请求顺序、失败提示及终端保持。启停与 SSH 使用模拟实现，没有启动真实 FE/BFF、连接 MN 或写入真实项目 `.env`。
+- 生产构建入口为 `node config/scripts/build-zstack-production.mjs 20261019.1`。要求 HEAD 等于新获取的 `origin/dev` 且已跟踪源码无改动；沿用当前未变动宿主产物，重新编译带构建号的 renderer 并打包 arm64。构建目录记录远端、精确提交、构建号和时间。
+
 ### 2026-10-15 远端 dev 生产构建流程
 
 - 用户确认沿用 `xfu-dev/<构建号>` 版本分支；本地聚焦验证完成后直接合并并推送个人仓库 `origin/dev`，不再等待用户测试或再次请求生产构建许可。开发分支也推送保留，合并使用 `--no-ff`，便于按版本追溯。

@@ -4,7 +4,7 @@ import { preparationCommand } from './dependency-install.mjs'
 import { stopRun } from './stop-run.mjs'
 import { observeRunState, processGone } from './run-state.mjs'
 import { createServerChecks } from './server-reachability.mjs'
-import { readBffEnvironment, validateBffEnvironment } from './bff-environment.mjs'
+import { readBffEnvironment, bffLaunchEnvironment } from './bff-environment.mjs'
 import { detectBffLocalHost } from './bff-local-host.mjs'
 import { setTimeout as delay } from 'node:timers/promises'
 import fs from 'node:fs'
@@ -217,9 +217,22 @@ async function saveSelection(ctx, request) {
     apps: service === 'bff' ? (previous?.apps ?? []) : [...new Set(request.apps)],
     autoChanged: typeof request.autoChanged === 'boolean' ? request.autoChanged : (previous?.autoChanged ?? true),
     proxy: false,
+    sshForward: service === 'fe' || request.sshForward === undefined
+      ? previous?.sshForward === true : request.sshForward === true,
     host: service === 'fe' ? (previous?.host ?? '') : request.host || ''
   }
   await saveState(saved)
+}
+async function waitForSshForward(file) {
+  // Leave room for restart cleanup inside the host's 30-second command budget.
+  const deadline = readJson(file).createdAt + 20000
+  while (true) {
+    const run = readJson(file)
+    if (!run.sshForward || run.sshConnected) return
+    if (terminalStates.has(observeRunState(run))) throw new Error(run.error || 'SSH 转发启动已取消')
+    if (Date.now() >= deadline) throw new Error('SSH 转发尚未启动，已取消本次启动，请查看终端')
+    await delay(100)
+  }
 }
 async function launch(ctx, request, install = false) {
   const service = kind(request.kind)
@@ -245,6 +258,8 @@ async function launch(ctx, request, install = false) {
     preparation,
     readinessPorts = [],
     url = null
+  const bffSettings = service === 'bff' && !install
+    ? bffLaunchEnvironment(ctx, request.environment, selected.sshForward) : null
   if (install) {
     if (service === 'bff') {
       ;({ program, args } = preparationCommand('cloud', ['bff']))
@@ -302,6 +317,10 @@ async function launch(ctx, request, install = false) {
     service,
     product: name,
     host: service === 'bff' ? selected.host : null,
+    sshForward: bffSettings?.port ? {
+      host: selected.host, port: bffSettings.port,
+      knownHosts: path.join(directory, 'ssh-known-hosts')
+    } : null,
     url,
     registry: path.join(directory, 'module-federation-broker.json'),
     readinessPorts,
@@ -321,7 +340,7 @@ async function launch(ctx, request, install = false) {
   const completion = (async () => {
     try {
       if (service === 'bff' && !install) {
-        applyBffEnvironment(ctx, selected.host, request.environment)
+        applyBffEnvironment(ctx, selected.host, bffSettings.environment)
       }
       const command = [
         'env',
@@ -332,14 +351,19 @@ async function launch(ctx, request, install = false) {
       ].join(' ')
       let terminal
       if (existing?.handle) {
-        const workspace = await host.call('workspace.readContext', {})
-        if (workspace?.terminals.some((item) => item.id === existing.handle)) {
+        try {
+          const workspace = await host.call('workspace.readContext', {})
+          if (!workspace?.terminals.some((item) => item.id === existing.handle))
+            throw new Error('原终端已关闭')
           await host.call('terminal.focusOwned', { terminalId: existing.handle })
           const accepted = await host.call('terminal.sendText', {
             terminalId: existing.handle, text: command, enter: true
           })
           if (!accepted.accepted) throw new Error('终端未接受启动命令，请检查原终端后重试')
           terminal = { handle: existing.handle }
+        } catch {
+          // The panel shows the notice before continuing this reserved run in a new terminal.
+          return { id, needsTerminal: true, notice: '原终端无法复用，将新建终端继续启动服务' }
         }
       }
       terminal ??= await host.call('terminal.create', {
@@ -349,6 +373,7 @@ async function launch(ctx, request, install = false) {
       })
       // The runner may already have written its state by the time terminal creation returns.
       atomicJson(`${file}.terminal`, { handle: terminal.handle })
+      await waitForSshForward(file)
       return { id }
     } catch (error) {
       const latest = readJson(file)
@@ -428,7 +453,7 @@ async function dispatch(request) {
     case 'start': {
       if (restarting.has(`${ctx.worktreeKey}:${kind(request.kind)}`))
         throw new Error('此服务正在重启')
-      if (request.kind === 'bff') validateBffEnvironment(ctx, request.environment)
+      if (request.kind === 'bff') bffLaunchEnvironment(ctx, request.environment, request.sshForward)
       if (request.apps) await saveSelection(ctx, request)
       if (request.kind === 'bff') await serverChecks.start(serverCandidates(await state(), ctx))
       return launch(ctx, request)
@@ -438,7 +463,7 @@ async function dispatch(request) {
       const current = runState(ctx, service)
       if (restarting.has(key) || current?.id !== request.id || current.state !== 'running' || current.health !== 'ready')
         throw new Error('服务尚未启动完成，或任务已变化，请刷新后重试')
-      if (service === 'bff') validateBffEnvironment(ctx, request.environment)
+      if (service === 'bff') bffLaunchEnvironment(ctx, request.environment, request.sshForward)
       if (request.apps) await saveSelection(ctx, request)
       restarting.add(key)
       const completion = stopRun(current.file).then(async () => {
@@ -446,6 +471,35 @@ async function dispatch(request) {
         const launched = await launch(ctx, request)
         return launched.completion
       }).finally(() => restarting.delete(key))
+      return { completion }
+    }
+    case 'createTerminal': {
+      const current = runState(ctx, kind(request.kind))
+      if (current?.id !== request.id || current.state !== 'starting')
+        throw new Error('启动请求已变化，请刷新后重试')
+      const run = readJson(current.file)
+      try { fs.closeSync(fs.openSync(`${current.file}.terminal-requested`, 'wx', 0o600)) }
+      catch (error) {
+        if (error.code === 'EEXIST') throw new Error('正在创建终端，请勿重复启动')
+        throw error
+      }
+      const command = ['env', 'ELECTRON_RUN_AS_NODE=1', quote(process.execPath),
+        quote(path.join(root, 'runner.mjs')), quote(current.file)].join(' ')
+      const completion = host.call('terminal.create', {
+        worktreeId: ctx.worktreeId, command, title: run.service.toUpperCase()
+      }).then(async terminal => {
+        atomicJson(`${current.file}.terminal`, { handle: terminal.handle })
+        await waitForSshForward(current.file)
+        return { id: run.id }
+      }).catch(error => {
+        const latest = readJson(current.file)
+        if (latest.runnerPid) fs.writeFileSync(`${current.file}.stop`, run.id)
+        else {
+          atomicJson(run.lock, { id: 'cancelled', file: current.file })
+          atomicJson(current.file, { ...latest, state: 'failed', error: error.message, updatedAt: Date.now() })
+        }
+        throw error
+      })
       return { completion }
     }
     case 'install':
