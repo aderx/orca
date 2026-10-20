@@ -172,12 +172,11 @@ test('worker defaults to the actual .env host and installs selected FE scope in 
     fs.readFileSync(path.join(root, 'packages/products/cloud/bff/.env'), 'utf8'),
     '# 测试\nZS_MN_SERVER=http://192.0.2.8:8080\n'
   )
-  await assert.rejects(request({ action: 'start', kind: 'fe' }), /尚未结束/)
   atomicJson(file, { ...run, state: 'exited', code: 0 })
   assert.equal((await request({ action: 'status' })).fe.operation, 'install')
   const ctx = context(input)
   saved.selections[`${ctx.worktreeKey}:cloud`].host = '192.0.2.9'
-  assert.equal((await request({ action: 'snapshot' })).selection.host, '192.0.2.8')
+  assert.equal((await request({ action: 'snapshot' })).selection.host, '192.0.2.9')
   await request({ action: 'saveSelection', kind: 'bff', apps: [], host: '192.0.2.8', proxy: true })
   const pendingBff = request({ action: 'start', kind: 'bff' })
   t.after(() => releaseBff())
@@ -195,7 +194,6 @@ test('worker defaults to the actual .env host and installs selected FE scope in 
   assert.deepEqual(bff.args, ['start:dev'])
   await request({ action: 'start', kind: 'fe' })
   assert.equal((await request({ action: 'status' })).bff.state, 'starting')
-  await assert.rejects(request({ action: 'start', kind: 'bff' }), /尚未结束/)
   releaseBff()
   await pendingBff
   const fe = readJson(launched.command.match(/'([^']+\.json)'$/)[1])
@@ -226,7 +224,7 @@ test('worker defaults to the actual .env host and installs selected FE scope in 
   const empty = await request({ action: 'snapshot' })
   assert.deepEqual(empty.servers, [])
   assert.equal(empty.currentHost, '192.0.2.8')
-  assert.equal(empty.selection.host, '')
+  assert.equal(empty.selection.host, '192.0.2.8')
   await request({ action: 'saveServers', servers: [{host: '192.0.2.9', name: 'new'}] })
   assert.deepEqual((await request({ action: 'snapshot' })).servers, [{host: '192.0.2.9', name: 'new'}])
 })

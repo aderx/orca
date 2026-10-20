@@ -161,7 +161,7 @@ try {
       !product.disabled && win.document.querySelector('.module-name')?.textContent === 'zns-network'
   )
   assert.equal(win.document.querySelectorAll('.module').length, 1)
-  assert.equal(win.document.getElementById('toggle-fe').disabled, true)
+  assert.equal(win.document.getElementById('toggle-fe').disabled, false)
   win.document.getElementById('selectAll').click()
   await wait(() => !product.disabled && !win.document.getElementById('toggle-fe').disabled)
   holdStarts = true

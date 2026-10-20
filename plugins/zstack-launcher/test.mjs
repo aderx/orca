@@ -193,17 +193,18 @@ test('worker uses the host default activation contract and registers both declar
 })
 
 test(
-  'prepares dependencies before starting and never starts after failed preparation',
+  'prepares dependencies before starting and still attempts the service after preparation fails',
   { timeout: 10000 },
   async (t) => {
     const ready = await runFixture(t, "console.log('SERVICE-START')", "console.log('PREPARED')")
     assert.equal((await ready.ended).code, 0)
     const log = fs.readFileSync(ready.run.log, 'utf8')
     assert.ok(log.indexOf('PREPARED\n') < log.indexOf('SERVICE-START\n'))
-    const failed = await runFixture(t, "console.log('MUST-NOT-START')", 'process.exitCode=9')
-    assert.equal((await failed.ended).code, 9)
-    assert.equal(readJson(failed.file).state, 'failed')
-    assert.ok(!fs.readFileSync(failed.run.log, 'utf8').includes('MUST-NOT-START'))
+    const failed = await runFixture(t, "console.log('SERVICE-START')", 'process.exitCode=9')
+    assert.equal((await failed.ended).code, 0)
+    assert.equal(readJson(failed.file).state, 'exited')
+    assert.match(readJson(failed.file).warnings[0].message, /依赖准备失败/)
+    assert.ok(fs.readFileSync(failed.run.log, 'utf8').includes('SERVICE-START'))
   }
 )
 test(

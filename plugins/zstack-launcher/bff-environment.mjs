@@ -14,12 +14,12 @@ const groups = [
 const editable = new Set(groups.flatMap(group => group.keys))
 const revision = text => createHash('sha256').update(text).digest('hex')
 
-function environmentSource(ctx) {
+function environmentSource(ctx, writing = false) {
   const target = path.join(ctx.path, 'packages/products/cloud/bff/.env')
   const relative = path.relative(fs.realpathSync(ctx.path), fs.realpathSync(path.dirname(target)))
-  if (relative.startsWith('..') || path.isAbsolute(relative))
+  if (writing && (relative.startsWith('..') || path.isAbsolute(relative)))
     throw new Error('BFF 目录指向当前 worktree 之外，请先准备独立环境')
-  if (fs.existsSync(target) && fs.lstatSync(target).isSymbolicLink())
+  if (writing && fs.existsSync(target) && fs.lstatSync(target).isSymbolicLink())
     throw new Error('BFF .env 是符号链接，请先复制为当前 worktree 的独立文件')
   const source = fs.existsSync(target) ? target : path.join(ctx.primary, 'packages/products/cloud/bff/.env')
   if (!fs.existsSync(source)) throw new Error('没有 BFF .env，请先准备项目环境配置')
@@ -57,19 +57,19 @@ function encodeValue(value, key) {
   }
   throw new Error(`${key} 包含无法直接保存的引号组合，请在 .env 文件中修改`)
 }
-function editsFor(text, draft) {
+function editsFor(text, draft, runtime = false) {
   if (draft === undefined) return new Map()
   if (!draft || !draft.changes || typeof draft.changes !== 'object' || Array.isArray(draft.changes))
     throw new Error('无效的高级配置')
   const changes = new Map(Object.entries(draft.changes))
-  if (changes.size && draft.revision !== revision(text))
+  if (!runtime && changes.size && draft.revision !== revision(text))
     throw new Error('.env 已被修改，请重新打开服务页面后再修改配置')
   const available = new Set(assignments(text).map(entry => entry.key))
   for (const [key, value] of changes) {
-    if (!editable.has(key) || (!available.has(key) && key !== 'HOST'))
+    if (!editable.has(key) || (!runtime && !available.has(key) && key !== 'HOST'))
       throw new Error(`高级配置不支持修改 ${key}`)
     if (typeof value !== 'string' || value.includes('\0')) throw new Error(`${key} 的值无效`)
-    encodeValue(value, key)
+    if (!runtime) encodeValue(value, key)
   }
   return changes
 }
@@ -93,29 +93,11 @@ export function readBffEnvironment(ctx) {
 export function validateBffEnvironment(ctx, draft) {
   if (draft !== undefined) editsFor(environmentSource(ctx).text, draft)
 }
-export function bffLaunchEnvironment(ctx, draft, sshForward) {
-  const { text } = environmentSource(ctx)
-  const changes = editsFor(text, draft)
-  const values = new Map(assignments(text).map(entry => [entry.key, entry.value]))
-  for (const [key, value] of changes) values.set(key, value)
-  const summary = {
-    host: sshForward ? '127.0.0.1' : values.get('HOST') || '',
-    flags: featureFlags.filter(key => values.get(key) === 'true')
-  }
-  if (!sshForward) return { environment: draft, summary }
-  const port = Number(values.get('PORT') ||
-    (Number(values.get('BASE_PORT') || '3100') + Number(values.get('INSTANCE_ID') || '0')))
-  if (!Number.isInteger(port) || port < 1 || port > 65535)
-    throw new Error('SSH 转发需要有效的 BFF 端口，请检查 BASE_PORT 和 INSTANCE_ID')
-  changes.set('HOST', '127.0.0.1')
-  return { environment: { revision: revision(text), changes: Object.fromEntries(changes) }, port, summary }
-}
-export function writeBffEnvironment(ctx, host, draft) {
-  const { target, text } = environmentSource(ctx)
-  const entries = assignments(text), changes = editsFor(text, draft)
+function connectionValues(entries, host) {
   const literalHost = isIP(host) === 6 ? `[${host}]` : host
-  changes.set('ZS_MN_SERVER', `http://${literalHost}:8080`)
-  changes.set('ZS_MYSQL_HOST', host)
+  const values = new Map([
+    ['ZS_MN_SERVER', `http://${literalHost}:8080`], ['ZS_MYSQL_HOST', host]
+  ])
   const zops = entries.findLast(entry => entry.key === 'ZOPS_SERVER')
   if (zops) {
     let value = `http://${literalHost}:10010`
@@ -124,8 +106,37 @@ export function writeBffEnvironment(ctx, host, draft) {
       url.hostname = literalHost
       value = url.href.replace(/\/$/, '')
     } catch { /* Keep the existing default for an invalid ZOPS URL. */ }
-    changes.set('ZOPS_SERVER', value)
+    values.set('ZOPS_SERVER', value)
   }
+  return values
+}
+export function bffLaunchEnvironment(ctx, draft, sshForward, host) {
+  let text = '', warning
+  try { text = environmentSource(ctx).text }
+  catch (error) { warning = `环境文件读取失败，按本次输入启动：${error.message}` }
+  const changes = editsFor(text, draft, true)
+  const values = new Map(assignments(text).map(entry => [entry.key, entry.value]))
+  for (const [key, value] of changes) values.set(key, value)
+  const summary = {
+    host: sshForward ? '127.0.0.1' : values.get('HOST') || '',
+    flags: featureFlags.filter(key => values.get(key) === 'true')
+  }
+  if (sshForward) changes.set('HOST', '127.0.0.1')
+  const environment = sshForward
+    ? { revision: draft?.revision ?? revision(text), changes: Object.fromEntries(changes) }
+    : draft
+  const env = Object.fromEntries([...values, ...changes])
+  if (host) Object.assign(env, Object.fromEntries(connectionValues(assignments(text), host)))
+  const port = Number(values.get('PORT') ||
+    (Number(values.get('BASE_PORT') || '3100') + Number(values.get('INSTANCE_ID') || '0')))
+  const validPort = Number.isInteger(port) && port > 0 && port <= 65535
+  if (sshForward && !validPort) warning = '无法确定 SSH 转发端口，跳过转发并继续执行 BFF 启动命令'
+  return { environment, env, port: sshForward && validPort ? port : null, summary, warning }
+}
+export function writeBffEnvironment(ctx, host, draft) {
+  const { target, text } = environmentSource(ctx, true)
+  const entries = assignments(text), changes = editsFor(text, draft)
+  for (const [key, value] of connectionValues(entries, host)) changes.set(key, value)
   let result = text
   const found = new Set()
   for (const entry of entries.reverse()) {

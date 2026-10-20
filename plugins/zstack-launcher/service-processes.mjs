@@ -22,7 +22,7 @@ async function inspect(program, args) {
     throw error
   }
 }
-async function processIdentity(pid) {
+export async function processIdentity(pid) {
   const value = (
     await inspect('/bin/ps', ['-p', String(pid), '-o', 'ppid=,pgid=,lstart=,command='])
   ).trim()
