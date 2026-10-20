@@ -20,26 +20,32 @@ export function context(input) {
   }
   const root = fs.realpathSync(input.path)
   if (
-    !fs.existsSync(path.join(root, 'scripts/start.ts')) ||
+    !fs.existsSync(path.join(root, 'scripts/start.ts')) &&
     !fs.existsSync(path.join(root, 'packages/products/cloud/bff/package.json'))
   ) {
     throw new Error('当前工作树不是受支持的 zstack-ui-next 项目')
   }
-  let gitDir = path.join(root, '.git')
-  if (fs.statSync(gitDir).isFile()) {
-    const match = fs.readFileSync(gitDir, 'utf8').match(/^gitdir:\s*(.+)/)
-    if (!match) throw new Error('无效的 worktree Git 目录')
-    gitDir = path.resolve(root, match[1].trim())
-  }
-  const common = fs.existsSync(path.join(gitDir, 'commondir'))
-    ? path.resolve(gitDir, fs.readFileSync(path.join(gitDir, 'commondir'), 'utf8').trim())
-    : gitDir
+  let common, contextWarning
+  try {
+    let gitDir = path.join(root, '.git')
+    if (fs.existsSync(gitDir)) {
+      if (fs.statSync(gitDir).isFile()) {
+        const match = fs.readFileSync(gitDir, 'utf8').match(/^gitdir:\s*(.+)/)
+        if (!match) throw new Error('无效的 worktree Git 目录')
+        gitDir = path.resolve(root, match[1].trim())
+      }
+      common = fs.existsSync(path.join(gitDir, 'commondir'))
+        ? path.resolve(gitDir, fs.readFileSync(path.join(gitDir, 'commondir'), 'utf8').trim())
+        : gitDir
+    }
+  } catch (error) { contextWarning = `Git 信息读取失败，使用当前目录：${error.message}` }
   return {
     ...input,
     path: root,
-    primary: path.dirname(common),
-    projectKey: key(common),
-    worktreeKey: key(root)
+    primary: common ? path.dirname(common) : root,
+    projectKey: key(common || root),
+    worktreeKey: key(root),
+    contextWarning
   }
 }
 export function server(item) {

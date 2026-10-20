@@ -917,7 +917,7 @@
     const loaded = snapshot.loadedLists ?? ['bff', 'fe']
     for (const kind of ['bff', 'fe']) listExpanded[kind] = loaded.includes(kind)
     selected = new Set([
-      ...snapshot.selection.apps.filter((name) => !listExpanded.fe ||
+      ...snapshot.selection.apps.filter((name) => snapshot.moduleError || !listExpanded.fe ||
         snapshot.modules.some((module) => module.name === name && module.available)),
       ...entryModules()
     ])
@@ -942,7 +942,7 @@
     autoChanged = snapshot.selection.autoChanged !== false
     if (autoChanged && changedApps.some((name) => !selected.has(name))) {
       changedApps.forEach((name) => selected.add(name))
-      await save()
+      await save().catch(error => notice(error.message))
     }
     if (snapshot.changeError) notice(snapshot.changeError, true)
     if (snapshot.moduleError) notice(snapshot.moduleError)
@@ -1272,11 +1272,7 @@
     notice('')
   }
   async function submitService(args) {
-    const result = await request(args)
-    if (result.needsTerminal) {
-      notice(result.notice)
-      await request({ action: 'createTerminal', kind: args.kind, id: result.id })
-    }
+    await request(args)
     if (presentation) parent.postMessage({ type: 'orca-panel-dismiss' }, '*')
   }
   function icon(name) {
@@ -1350,14 +1346,13 @@
         busy ||
         Boolean(operation) ||
         !snapshot ||
-        run?.state === 'stopping' ||
-        (!active && (kind === 'bff' ? !selectedHost : !count))
+        (!active && (kind === 'bff' ? !selectedHost : !selected.size))
       button.classList.toggle('primary', !active)
       const restart = $('restart-' + kind)
-      restart.hidden = run?.state !== 'running' || run.health !== 'ready' || starting || stopping
+      restart.hidden = !active || Boolean(operation)
       restart.disabled = busy || Boolean(operation)
       if (kind === 'fe') {
-        $('open-fe').hidden = restart.hidden
+        $('open-fe').hidden = run?.state !== 'running' || run.health !== 'ready' || Boolean(operation)
         $('open-fe').disabled = busy || Boolean(operation)
       }
       $(kind + '-info').textContent = !presentation && run?.state === 'preparing' ? '正在准备依赖…' : ''
@@ -1620,6 +1615,7 @@
         ...(run.host ? [run.host] : []),
         ...(run.environmentSummary ? [`HOST:${run.environmentSummary.host || '未配置'}`] : []),
         ...(run.sshForward ? [`SSH:${run.sshForward.password}`] : []),
+        ...(run.sshForward && run.sshError ? ['SSH 连接失败'] : []),
         ...(run.environmentSummary?.flags || [])
       ] : run.apps || []
       if (values.length) {

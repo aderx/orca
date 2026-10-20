@@ -31,7 +31,9 @@ export function createSshForward(settings, { env, output, onPid, onFailure, spaw
   function signal(value) {
     if (!child.pid || ended) return
     try { process.kill(-child.pid, value) }
-    catch (error) { if (error.code !== 'ESRCH') throw error }
+    catch (error) {
+      if (error.code !== 'ESRCH') onFailure(new Error(`SSH 转发清理失败：${error.message}`))
+    }
   }
   function stop() {
     if (!stopping && !ended) {
@@ -60,7 +62,7 @@ export function createSshForward(settings, { env, output, onPid, onFailure, spaw
     clearTimeout(timer)
     clearTimeout(escalation)
     const message = /Permission denied|Authentication failed/i.test(errors)
-      ? 'SSH 密码认证失败，已停止启动，不再重试'
+      ? 'SSH 密码认证失败，已停止本次连接，不再重试'
       : /remote port forwarding failed/i.test(errors)
         ? `SSH 转发端口 ${port} 无法建立，请检查服务器端口占用`
         : `SSH 转发${connected ? '已断开' : '建立失败'}：${failure?.message || errors.trim() || signal || code}`

@@ -22,7 +22,7 @@ fs.mkdirSync(stage, { recursive: true })
 const info = {
   sourceRemote: git('remote', 'get-url', 'origin'), sourceRef: 'origin/dev', sourceHead, buildVersion,
   architecture: process.arch, startedAt: new Date().toISOString(),
-  reuse: 'Prepared main/preload/CLI/native resources; owning sources unchanged in this plugin-only release'
+  reuse: 'Prepared main/preload/CLI/native resources with unchanged owning sources; renderer compiled from source'
 }
 fs.writeFileSync(path.join(output, 'BUILD-INFO.json'), JSON.stringify(info, null, 2))
 fs.writeFileSync(path.join(output, 'build-root.pid'), String(process.pid))

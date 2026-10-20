@@ -2,19 +2,20 @@ import { productConfigs } from './products.mjs'
 import { changedModules } from './changed-modules.mjs'
 import { preparationCommand } from './dependency-install.mjs'
 import { stopRun } from './stop-run.mjs'
-import { observeRunState, processGone } from './run-state.mjs'
+import { observeRunState } from './run-state.mjs'
 import { createServerChecks } from './server-reachability.mjs'
 import { readBffEnvironment, bffLaunchEnvironment } from './bff-environment.mjs'
 import { detectBffLocalHost } from './bff-local-host.mjs'
-import { setTimeout as delay } from 'node:timers/promises'
 import fs from 'node:fs'
 import path from 'node:path'
+import os from 'node:os'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import {
   context,
+  server,
   servers,
   importServers,
   currentBffHost,
@@ -31,12 +32,39 @@ const execute = promisify(execFile)
 const terminalStates = new Set(['stopped', 'exited', 'failed', 'cancelled'])
 const catalogCache = new Map()
 const serverChecks = createServerChecks(undefined, {
-  load: async () => (await host.call('storage.get', { key: 'serverChecks' })).value,
-  save: (value) => host.call('storage.set', { key: 'serverChecks', value })
+  load: async () => (await attempt(null, '读取服务器检测缓存',
+    () => host.call('storage.get', { key: 'serverChecks' })))?.value,
+  save: (value) => attempt(null, '保存服务器检测缓存',
+    () => host.call('storage.set', { key: 'serverChecks', value }))
 })
-const restarting = new Set()
+const notices = new Map()
+const runMemory = new Map()
+let cachedState
 let host
 let chain = Promise.resolve()
+function warn(ctx, key, message) {
+  const scope = ctx?.worktreeKey || 'global'
+  const entries = notices.get(scope) ?? new Map()
+  const text = String(message).slice(0, 1000)
+  if (entries.get(key)?.message !== text)
+    entries.set(key, { id: randomUUID(), message: text })
+  while (entries.size > 16) entries.delete(entries.keys().next().value)
+  notices.set(scope, entries)
+}
+function attemptSync(ctx, key, action, fallback) {
+  try { return action() }
+  catch (error) { warn(ctx, key, `${key}失败：${error.message}`); return fallback }
+}
+async function attempt(ctx, key, action, fallback) {
+  try { return await action() }
+  catch (error) { warn(ctx, key, `${key}失败：${error.message}`); return fallback }
+}
+function runNotices(ctx, runs) {
+  return [...(notices.get('global')?.values() ?? []), ...(notices.get(ctx.worktreeKey)?.values() ?? []),
+    ...runs.flatMap(run => [...(run?.warnings ?? []),
+      ...(run?.state === 'failed' ? [{ id: `${run.id}:failed`, message: run.error || `${run.title} 启动失败，请查看终端` }] : [])])
+  ].slice(-32)
+}
 function product(value) {
   if (typeof value !== 'string' || !/^[a-z][a-z0-9]*$/.test(value)) throw new Error('无效产品')
   return value
@@ -62,26 +90,30 @@ async function catalog(ctx, name, refresh = false) {
   return modules
 }
 async function state() {
-  return (
-    (await host.call('storage.get', { key: 'configuration' })).value ?? {
-      version: 1,
-      projects: {},
-      selections: {}
-    }
-  )
+  if (cachedState) return cachedState
+  const saved = await attempt(null, '读取启动配置缓存',
+    () => host.call('storage.get', { key: 'configuration' }))
+  cachedState = { version: 1, projects: saved?.value?.projects ?? {}, selections: saved?.value?.selections ?? {} }
+  return cachedState
 }
-const saveState = (value) => host.call('storage.set', { key: 'configuration', value })
+const saveState = (value) => {
+  cachedState = value
+  return attempt(null, '保存启动配置缓存', () => host.call('storage.set', { key: 'configuration', value }))
+}
 function projectState(state, ctx) {
-  return state.projects[ctx.projectKey] ?? { servers: importServers(ctx), modules: {} }
+  return state.projects[ctx.projectKey] ?? { servers: attemptSync(ctx, '导入服务器列表', () => importServers(ctx), []), modules: {} }
 }
 function lockPath(ctx, service) {
   return path.join(directory, ctx.worktreeKey, `${kind(service)}.json`)
 }
 function runState(ctx, service) {
   const lock = lockPath(ctx, service)
-  if (!fs.existsSync(lock)) return null
-  const pointer = readJson(lock)
-  const run = readJson(pointer.file)
+  let pointer = runMemory.get(lock)
+  if (!pointer && fs.existsSync(lock)) pointer = attemptSync(ctx, `${service} 历史记录读取`, () => readJson(lock))
+  if (!pointer) return null
+  const run = attemptSync(ctx, `${service} 运行状态读取`, () => readJson(pointer.file), pointer.run)
+  if (!run) return null
+  runMemory.set(lock, { ...pointer, run })
   const observed = observeRunState(run)
   const productIndex = run.args?.indexOf('--product') ?? -1
   const appsIndex = run.args?.indexOf('--apps') ?? -1
@@ -94,14 +126,16 @@ function runState(ctx, service) {
     host: run.host ?? (service === 'bff' ? run.title?.match(/^BFF · (.+)$/)?.[1] : null) ?? null,
     environmentSummary: run.environmentSummary ?? null,
     sshForward: run.sshForward ? { password: run.sshForward.password ?? 'password' } : null,
+    sshConnected: run.sshConnected ?? null,
+    sshError: run.sshError ?? null,
+    warnings: run.warnings ?? [],
     url: run.url ?? null,
     operation: run.operation ?? 'start',
     health: run.startedAt ? 'ready' : run.health ?? 'starting',
     log: run.log,
     file: pointer.file,
-    handle: fs.existsSync(`${pointer.file}.terminal`)
-      ? readJson(`${pointer.file}.terminal`).handle
-      : null,
+    handle: attemptSync(ctx, `${service} 终端记录读取`, () => fs.existsSync(`${pointer.file}.terminal`)
+      ? readJson(`${pointer.file}.terminal`).handle : pointer.handle ?? null, pointer.handle ?? null),
     code: run.code ?? null,
     error:
       run.error ??
@@ -113,7 +147,7 @@ function runState(ctx, service) {
 }
 function serverCandidates(saved, ctx) {
   const candidates = [...projectState(saved, ctx).servers]
-  const currentHost = currentBffHost(ctx)
+  const currentHost = attemptSync(ctx, '读取当前管理节点', () => currentBffHost(ctx), '')
   if (!saved.projects[ctx.projectKey] && currentHost && !candidates.some((server) => server.host === currentHost))
     candidates.push({ host: currentHost, name: '当前工作树' })
   return candidates
@@ -138,7 +172,7 @@ async function snapshot(ctx, name, refresh, presentation, expanded) {
     }
   }
   const products = await Promise.all(
-    productConfigs(ctx.path).map(async (item) => {
+    attemptSync(ctx, '读取产品目录', () => productConfigs(ctx.path), [{ id: name, label: name }]).map(async (item) => {
       if (!needsFrontend) return { id: item.id, label: item.label }
       try {
         const entries = (await catalog(ctx, item.id))
@@ -161,9 +195,9 @@ async function snapshot(ctx, name, refresh, presentation, expanded) {
       changeError = error.message
     }
   }
-  const currentHost = currentBffHost(ctx)
+  const currentHost = attemptSync(ctx, '读取当前管理节点', () => currentBffHost(ctx), '')
   const candidates = needsBackend ? serverCandidates(saved, ctx) : []
-  if (needsBackend) await serverChecks.start(candidates)
+  if (needsBackend) await attempt(ctx, '检测服务器', () => serverChecks.start(candidates))
   const selection = saved.selections[`${ctx.worktreeKey}:${name}`] ?? {
     apps: [],
     proxy: false,
@@ -176,7 +210,7 @@ async function snapshot(ctx, name, refresh, presentation, expanded) {
     currentHost,
     products,
     servers: candidates,
-    ...(await serverChecks.snapshot(candidates)),
+    ...(await attempt(ctx, '读取服务器检测结果', () => serverChecks.snapshot(candidates), {})),
     loadedLists: [needsBackend ? 'bff' : null, needsFrontend ? 'fe' : null].filter(Boolean),
     modules,
     moduleError,
@@ -184,14 +218,13 @@ async function snapshot(ctx, name, refresh, presentation, expanded) {
     changeError,
     selection: {
       ...selection,
-      host: !needsBackend ? selection.host || currentHost :
-        (candidates.some((server) => server.host === selection.host) ? selection.host : '') ||
-        (candidates.some((server) => server.host === currentHost) ? currentHost : '')
+      host: selection.host || currentHost
     },
     dependencies: {
       bff: fs.existsSync(path.join(ctx.path, 'packages/products/cloud/bff/node_modules/.bin/nest'))
     },
-    runs
+    runs,
+    notices: runNotices(ctx, Object.values(runs))
   }
 }
 function sshSettings(previous, request) {
@@ -208,201 +241,133 @@ function sshSettings(previous, request) {
 async function saveSelection(ctx, request) {
   const service = request.kind ?? request.presentation
   const name = product(request.product)
-  const modules =
-    request.kind === 'bff' || request.apps?.length === 0 ? [] : await catalog(ctx, name)
-  const available = new Set(modules.filter((value) => value.available).map((value) => value.name))
-  if (
-    !Array.isArray(request.apps) ||
-    (request.kind !== 'bff' && !request.apps.every((value) => available.has(value)))
-  )
-    throw new Error('模块已不存在或不可启动，请刷新并重新选择')
-  if (typeof request.proxy !== 'boolean') throw new Error('无效的代理选项')
+  if (!Array.isArray(request.apps) || !request.apps.every(value => typeof value === 'string'))
+    throw new Error('无效的模块参数')
   const saved = await state()
-  const candidates = projectState(saved, ctx).servers
-  if (
-    request.host &&
-    request.host !== currentBffHost(ctx) &&
-    !candidates.some((value) => value.host === request.host)
-  )
-    throw new Error('后端服务器已被修改，请重新选择')
   const previous = saved.selections[`${ctx.worktreeKey}:${name}`]
   saved.selections[`${ctx.worktreeKey}:${name}`] = {
     apps: service === 'bff' ? (previous?.apps ?? []) : [...new Set(request.apps)],
     autoChanged: typeof request.autoChanged === 'boolean' ? request.autoChanged : (previous?.autoChanged ?? true),
     proxy: false,
-    ...sshSettings(previous, service === 'fe' ? {} : request),
+    ...attemptSync(ctx, 'SSH 配置', () => sshSettings(previous, service === 'fe' ? {} : request),
+      { sshForward: false, sshPassword: '' }),
     host: service === 'fe' ? (previous?.host ?? '') : request.host || ''
   }
   await saveState(saved)
 }
-async function waitForSshForward(file) {
-  // Leave room for restart cleanup inside the host's 30-second command budget.
-  const deadline = readJson(file).createdAt + 20000
-  while (true) {
-    const run = readJson(file)
-    if (!run.sshForward || run.sshConnected) return
-    if (terminalStates.has(observeRunState(run))) throw new Error(run.error || 'SSH 转发启动已取消')
-    if (Date.now() >= deadline) throw new Error('SSH 转发尚未启动，已取消本次启动，请查看终端')
-    await delay(100)
-  }
+const terminalJobs = new Map()
+async function startTerminal(ctx, run, file, reuseHandle) {
+  if (terminalJobs.has(file)) return terminalJobs.get(file)
+  const completion = (async () => {
+    const command = ['env', 'ELECTRON_RUN_AS_NODE=1', quote(process.execPath),
+      quote(path.join(root, 'runner.mjs')), quote(file)].join(' ')
+    let terminal
+    if (reuseHandle) {
+      try {
+        const workspace = await host.call('workspace.readContext', {})
+        if (!workspace?.terminals.some(item => item.id === reuseHandle)) throw new Error('原终端已关闭')
+        await host.call('terminal.focusOwned', { terminalId: reuseHandle })
+        const result = await host.call('terminal.sendText', { terminalId: reuseHandle, text: command, enter: true })
+        if (!result.accepted) throw new Error('终端未接受命令')
+        terminal = { handle: reuseHandle }
+      } catch (error) {
+        warn(ctx, `${run.id}:terminal`, `原终端无法复用，已改用新终端：${error.message}`)
+      }
+    }
+    try {
+      terminal ??= await host.call('terminal.create', { worktreeId: ctx.worktreeId, command, title: run.service.toUpperCase() })
+    } catch (error) {
+      Object.assign(run, { state: 'failed', error: error.message, updatedAt: Date.now() })
+      attemptSync(ctx, '保存启动失败状态', () => atomicJson(file, run))
+      throw error
+    }
+    const pointer = runMemory.get(run.lock)
+    if (pointer?.file === file) pointer.handle = terminal.handle
+    attemptSync(ctx, '保存终端记录', () => atomicJson(`${file}.terminal`, { handle: terminal.handle }))
+    return { id: run.id, notices: runNotices(ctx, []) }
+  })()
+  terminalJobs.set(file, completion)
+  return completion
 }
 async function launch(ctx, request, install = false) {
-  const service = kind(request.kind)
-  const existing = runState(ctx, service)
-  if (existing && !terminalStates.has(existing.state))
-    throw new Error('当前 worktree 的同类服务尚未结束，请先停止或取消待启动任务')
-  if (existing) {
-    const previous = readJson(existing.file)
-    const deadline = Date.now() + 2000
-    while (previous.runnerPid && !processGone(previous.runnerPid)) {
-      if (Date.now() >= deadline) throw new Error('原运行器尚未退出，请稍后重试')
-      await delay(50)
-    }
-  }
-  const name = product(request.product)
+  const service = kind(request.kind), name = product(request.product ?? 'cloud')
   const saved = await state()
-  const selected = saved.selections[`${ctx.worktreeKey}:${name}`]
-  if (!selected) throw new Error('请先选择并保存启动配置')
-  let cwd = ctx.path,
-    program = 'pnpm',
-    args,
-    title,
-    preparation,
-    readinessPorts = [],
-    url = null
-  const bffSettings = service === 'bff' && !install
-    ? bffLaunchEnvironment(ctx, request.environment, selected.sshForward !== false) : null
-  if (install) {
-    if (service === 'bff') {
-      ;({ program, args } = preparationCommand('cloud', ['bff']))
-      title = '安装 BFF 依赖'
-    } else {
-      const available = new Set(
-        (await catalog(ctx, name, true)).filter((item) => item.available).map((item) => item.name)
-      )
-      if (!selected.apps.length || !selected.apps.every((app) => available.has(app)))
-        throw new Error('先选择有源码的前端模块')
-      ;({ program, args } = preparationCommand(name, selected.apps))
-      title = `安装 FE 依赖 · ${name}`
-    }
-  } else if (service === 'bff') {
-    if (
-      !selected.host ||
-      (selected.host !== currentBffHost(ctx) &&
-        !projectState(saved, ctx).servers.some((value) => value.host === selected.host))
-    )
-      throw new Error('请选择有效的后端服务器')
+  const previous = saved.selections[`${ctx.worktreeKey}:${name}`] ?? {}
+  const selected = {
+    ...previous,
+    apps: request.apps ?? previous.apps ?? [],
+    host: request.host ?? previous.host ?? '',
+    ...attemptSync(ctx, 'SSH 配置', () => sshSettings(previous, request), { sshForward: false, sshPassword: '' })
+  }
+  let cwd = ctx.path, program = 'pnpm', args, title, preparation, modules = [], bffSettings
+  if (service === 'bff') {
     cwd = path.join(ctx.path, 'packages/products/cloud/bff')
-    preparation = { ...preparationCommand('cloud', ['bff']), cwd: ctx.path }
+    if (!install) {
+      selected.host = server({ host: selected.host, name: selected.host }).host
+      bffSettings = bffLaunchEnvironment(ctx, request.environment, selected.sshForward, selected.host)
+      if (bffSettings.warning) warn(ctx, 'BFF 环境', bffSettings.warning)
+    }
+    preparation = preparationCommand('cloud', ['bff'])
     args = ['start:dev']
     title = `BFF · ${selected.host}`
   } else {
-    const modules = await catalog(ctx, name, true)
-    const available = new Set(modules.filter((value) => value.available).map((value) => value.name))
-    if (!selected.apps.length || !selected.apps.every((value) => available.has(value)))
-      throw new Error('请至少选择一个当前可用模块')
-    preparation = { ...preparationCommand(name, selected.apps), cwd: ctx.path }
+    if (!Array.isArray(selected.apps) || !selected.apps.length ||
+        !selected.apps.every(value => typeof value === 'string' && value && !/[\0\r\n,]/.test(value)))
+      throw new Error('请选择需要启动的模块')
+    modules = await attempt(ctx, '读取模块目录', () => catalog(ctx, name, true), [])
+    preparation = preparationCommand(name, selected.apps)
     program = 'bun'
-    args = [
-      './scripts/start.ts',
-      '--product',
-      name,
-      '--apps',
-      selected.apps.join(','),
-      '--proxy=false'
-    ]
+    args = ['./scripts/start.ts', '--product', name, '--apps', selected.apps.join(','), '--proxy=false']
     title = `FE · ${name}`
-    readinessPorts = modules.filter((item) => selected.apps.includes(item.name)).map((item) => item.port)
-    const entry = modules.find((item) => item.isShell && selected.apps.includes(item.name) && item.port > 0)
-    if (entry) url = `http://localhost:${entry.port}`
   }
-  const id = randomUUID()
-  const lock = lockPath(ctx, service)
-  const file = path.join(directory, ctx.worktreeKey, `${service}-${id}.json`)
+  if (!fs.statSync(cwd).isDirectory()) throw new Error('启动目录不存在')
+  if (install) { cwd = ctx.path; ({ program, args } = preparation); title = `准备 ${service.toUpperCase()} 依赖`; preparation = null }
+  const existing = runState(ctx, service)
+  const id = randomUUID(), lock = lockPath(ctx, service)
+  let file = path.join(directory, ctx.worktreeKey, `${service}-${id}.json`)
+  const entry = modules.find(item => item.isShell && selected.apps.includes(item.name) && item.port > 0)
   const run = {
-    id,
-    lock,
-    log: `${file}.log`,
-    root: ctx.path,
-    cwd,
-    title,
-    service,
-    product: name,
+    id, lock, log: `${file}.log`, root: ctx.path, cwd, title, service, product: name,
     host: service === 'bff' ? selected.host : null,
+    env: bffSettings?.env,
     environmentSummary: bffSettings?.summary ?? null,
     sshForward: bffSettings?.port ? {
-      host: selected.host, port: bffSettings.port,
-      password: selected.sshPassword ?? 'password',
+      host: selected.host, port: bffSettings.port, password: selected.sshPassword,
       knownHosts: path.join(directory, 'ssh-known-hosts')
     } : null,
-    url,
+    url: entry ? `http://localhost:${entry.port}` : null,
     registry: path.join(directory, 'module-federation-broker.json'),
-    readinessPorts,
-    health: 'starting',
-    program,
-    preparation,
-    operation: install ? 'install' : 'start',
-    args,
-    state: 'starting',
-    createdAt: Date.now(),
-    updatedAt: Date.now()
+    readinessPorts: modules.filter(item => selected.apps.includes(item.name)).map(item => item.port),
+    health: 'starting', program, args, preparation: preparation ? { ...preparation, cwd: ctx.path } : null,
+    operation: install ? 'install' : 'start', state: 'starting', createdAt: Date.now(), updatedAt: Date.now()
   }
-  atomicJson(file, run)
-  if (existing?.handle) atomicJson(`${file}.terminal`, { handle: existing.handle })
-  atomicJson(lock, { id, file })
-  // Reserve the run in order, but do not block the other service on terminal creation.
+  try { atomicJson(file, run) }
+  catch (error) {
+    warn(ctx, '保存运行记录', `运行记录保存失败，改用临时目录继续启动：${error.message}`)
+    file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'orca-zstack-run-')), 'run.json')
+    run.log = `${file}.log`
+    atomicJson(file, run)
+  }
+  runMemory.set(lock, { id, file, run })
+  attemptSync(ctx, '保存运行索引', () => atomicJson(lock, { id, file }))
   const completion = (async () => {
-    try {
-      if (service === 'bff' && !install) {
-        applyBffEnvironment(ctx, selected.host, bffSettings.environment)
-      }
-      const command = [
-        'env',
-        'ELECTRON_RUN_AS_NODE=1',
-        quote(process.execPath),
-        quote(path.join(root, 'runner.mjs')),
-        quote(file)
-      ].join(' ')
-      let terminal
-      if (existing?.handle) {
-        try {
-          const workspace = await host.call('workspace.readContext', {})
-          if (!workspace?.terminals.some((item) => item.id === existing.handle))
-            throw new Error('原终端已关闭')
-          await host.call('terminal.focusOwned', { terminalId: existing.handle })
-          const accepted = await host.call('terminal.sendText', {
-            terminalId: existing.handle, text: command, enter: true
-          })
-          if (!accepted.accepted) throw new Error('终端未接受启动命令，请检查原终端后重试')
-          terminal = { handle: existing.handle }
-        } catch {
-          // The panel shows the notice before continuing this reserved run in a new terminal.
-          return { id, needsTerminal: true, notice: '原终端无法复用，将新建终端继续启动服务' }
-        }
-      }
-      terminal ??= await host.call('terminal.create', {
-        worktreeId: ctx.worktreeId,
-        command,
-        title: service.toUpperCase()
-      })
-      // The runner may already have written its state by the time terminal creation returns.
-      atomicJson(`${file}.terminal`, { handle: terminal.handle })
-      await waitForSshForward(file)
-      return { id }
-    } catch (error) {
-      const latest = readJson(file)
-      if (latest.runnerPid) fs.writeFileSync(`${file}.stop`, id)
-      else {
-        atomicJson(lock, { id: 'cancelled', file })
-        atomicJson(file, { ...latest, state: 'failed', error: error.message, updatedAt: Date.now() })
-      }
-      throw error
+    let reuseHandle
+    if (existing) {
+      const stopped = await stopRun(existing.file)
+      if (stopped.warning) warn(ctx, `${id}:cleanup`, stopped.warning)
+      if (stopped.stopped) reuseHandle = existing.handle
     }
+    // A user stop while old-service cleanup is pending must cancel this submitted launch.
+    if (fs.existsSync(`${file}.stop`)) return { id, notices: runNotices(ctx, []) }
+    if (bffSettings) attemptSync(ctx, '保存 BFF 环境（本次配置仍通过进程环境生效）',
+      () => applyBffEnvironment(ctx, selected.host, bffSettings.environment))
+    return startTerminal(ctx, run, file, reuseHandle)
   })()
   return { completion }
 }
 async function dispatch(request) {
   const ctx = context(request.context)
+  if (ctx.contextWarning) warn(ctx, 'Git 信息', ctx.contextWarning)
   const name = product(request.product ?? 'cloud')
   switch (request.action) {
     case 'snapshot':
@@ -471,64 +436,28 @@ async function dispatch(request) {
       await saveState(saved)
       return { ok: true }
     }
-    case 'start': {
-      if (restarting.has(`${ctx.worktreeKey}:${kind(request.kind)}`))
-        throw new Error('此服务正在重启')
-      if (request.kind === 'bff') bffLaunchEnvironment(ctx, request.environment, request.sshForward)
-      if (request.apps) await saveSelection(ctx, request)
-      if (request.kind === 'bff') await serverChecks.start(serverCandidates(await state(), ctx))
-      return launch(ctx, request)
-    }
+    case 'start':
     case 'restart': {
-      const service = kind(request.kind), key = `${ctx.worktreeKey}:${service}`
-      const current = runState(ctx, service)
-      if (restarting.has(key) || current?.id !== request.id || current.state !== 'running' || current.health !== 'ready')
-        throw new Error('服务尚未启动完成，或任务已变化，请刷新后重试')
-      if (service === 'bff') bffLaunchEnvironment(ctx, request.environment, request.sshForward)
-      if (request.apps) await saveSelection(ctx, request)
-      restarting.add(key)
-      const completion = stopRun(current.file).then(async () => {
-        // 停止确认后才复用原终端，不占用另一类服务的请求队列。
-        const launched = await launch(ctx, request)
-        return launched.completion
-      }).finally(() => restarting.delete(key))
-      return { completion }
+      if (request.apps) await attempt(ctx, '保存启动选择', () => saveSelection(ctx, request))
+      if (request.kind === 'bff') void attempt(ctx, '检测服务器', async () =>
+        serverChecks.start(serverCandidates(await state(), ctx)))
+      return launch(ctx, request)
     }
     case 'createTerminal': {
       const current = runState(ctx, kind(request.kind))
-      if (current?.id !== request.id || current.state !== 'starting')
-        throw new Error('启动请求已变化，请刷新后重试')
+      if (current?.id !== request.id) throw new Error('启动请求已变化')
       const run = readJson(current.file)
-      try { fs.closeSync(fs.openSync(`${current.file}.terminal-requested`, 'wx', 0o600)) }
-      catch (error) {
-        if (error.code === 'EEXIST') throw new Error('正在创建终端，请勿重复启动')
-        throw error
-      }
-      const command = ['env', 'ELECTRON_RUN_AS_NODE=1', quote(process.execPath),
-        quote(path.join(root, 'runner.mjs')), quote(current.file)].join(' ')
-      const completion = host.call('terminal.create', {
-        worktreeId: ctx.worktreeId, command, title: run.service.toUpperCase()
-      }).then(async terminal => {
-        atomicJson(`${current.file}.terminal`, { handle: terminal.handle })
-        await waitForSshForward(current.file)
-        return { id: run.id }
-      }).catch(error => {
-        const latest = readJson(current.file)
-        if (latest.runnerPid) fs.writeFileSync(`${current.file}.stop`, run.id)
-        else {
-          atomicJson(run.lock, { id: 'cancelled', file: current.file })
-          atomicJson(current.file, { ...latest, state: 'failed', error: error.message, updatedAt: Date.now() })
-        }
-        throw error
-      })
-      return { completion }
+      return { completion: startTerminal(ctx, run, current.file) }
     }
     case 'install':
       return launch(ctx, request, true)
     case 'stop': {
       const current = runState(ctx, request.kind)
       if (!current || current.id !== request.id) throw new Error('任务已变化，请刷新后重试')
-      return { completion: stopRun(current.file).then(() => ({ ok: true })) }
+      return { completion: stopRun(current.file).then(result => {
+        if (result.warning) warn(ctx, `${current.id}:stop`, result.warning)
+        return { ok: result.stopped, notices: runNotices(ctx, []) }
+      }) }
     }
     case 'focus': {
       const current = runState(ctx, request.kind)
@@ -555,6 +484,10 @@ async function dispatch(request) {
 }
 export default function activate(orca) {
   host = orca.host
+  cachedState = undefined
+  notices.clear()
+  runMemory.clear()
+  terminalJobs.clear()
   void state().then((saved) => serverChecks.start(
     Object.values(saved.projects).flatMap((project) => project.servers ?? [])
   )).catch(() => undefined)
@@ -587,7 +520,7 @@ export default function activate(orca) {
         description: description.slice(0, 256)
       }
     })
-    return { enabled: true, items }
+    return { enabled: true, items, notices: runNotices(ctx, ['bff', 'fe'].map(service => runState(ctx, service))) }
   })
   orca.commands.register('launcher.request', (request) => {
     const result = chain.then(() => dispatch(request))

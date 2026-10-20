@@ -1,4 +1,5 @@
 import { createElement, useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { usePluginPanelsStore } from '@/store/plugin-panels'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -12,6 +13,7 @@ import { workspaceToolbarSchema, type WorkspaceToolbarItem } from './workspace-p
 import { useWorkspaceToolbarPopoverState } from './workspace-toolbar-popover-state'
 
 type Entry = WorkspaceToolbarItem & { pluginKey: string; tabKey: string }
+const shownNotices = new Set<string>()
 const statusDot = {
   idle: '',
   starting: 'bg-status-warning motion-safe:animate-pulse',
@@ -78,6 +80,14 @@ export function WorkspacePluginToolbar({
               args: { context: boundContext }
             })
             const result = workspaceToolbarSchema.safeParse(value)
+            if (!cancelled && result.success) {
+              for (const notice of result.data.notices ?? []) {
+                const key = `${plugin.pluginKey}:${worktreeId}:${notice.id}`
+                if (shownNotices.has(key)) continue
+                shownNotices.add(key)
+                toast.error(notice.message, { id: `plugin-panel:${notice.message}` })
+              }
+            }
             if (result.success && result.data.enabled)
               next.push(
                 ...result.data.items.map((item) => ({
