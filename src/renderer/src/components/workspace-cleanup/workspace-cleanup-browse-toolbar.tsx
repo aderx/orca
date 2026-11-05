@@ -9,7 +9,7 @@ import {
 } from './workspace-cleanup-dialog-notices'
 import { WorkspaceCleanupFilterBar } from './workspace-cleanup-filter-bar'
 import { WorkspaceCleanupSortHeader } from './workspace-cleanup-sort-header'
-import type { WorkspaceSpaceScanProgress } from '../../../../shared/workspace-space-types'
+import type { WorkspaceSpaceScanProgress } from '../../../../shared/workspace-disk-space/workspace-space-types'
 
 export function WorkspaceCleanupBrowseToolbar({
   browse,
@@ -38,8 +38,7 @@ export function WorkspaceCleanupBrowseToolbar({
   onRunSpaceScan: () => void
   onToggleSelectAll: (selectAll: boolean) => void
 }): React.JSX.Element {
-  // Why: this toolbar re-renders per keystroke and per streaming tick; the
-  // group comparisons must not rerun unless the filter state itself changed.
+  // Filter-group comparisons must ignore keystroke/stream rerenders until filters themselves change.
   const activeFacetGroupCount = React.useMemo(
     () => listActiveWorkspaceCleanupFacetGroups(browse.filters).length,
     [browse.filters]

@@ -171,7 +171,7 @@ test('startup status stays ready while a live BFF logs runtime errors', { timeou
 
 test('worker uses the host default activation contract and registers both declared commands', () => {
   const handlers = new Map()
-  activate({
+  activate({ panels: { handle() {} },
     host: {
       call() {
         throw new Error('unexpected host call')

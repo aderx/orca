@@ -5,8 +5,8 @@ import type {
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
-} from '../../../shared/terminal-tab-types'
-import { resolveRootlessTerminalLayoutLeafId } from '../components/terminal-pane/terminal-layout-leaf-ids'
+} from '../../../shared/workspace-layout/terminal-tab-types'
+import { resolveRootlessTerminalLayoutLeafId } from '../../../shared/workspace-layout/terminal-pane-tree'
 
 export function surfaceKey(tabId: string, leafId: string): string {
   return `${tabId}\0${leafId}`

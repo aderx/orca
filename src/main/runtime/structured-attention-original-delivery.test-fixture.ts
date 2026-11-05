@@ -3,11 +3,17 @@ import {
   type MobileNotificationDismissEvent
 } from './runtime-mobile-notification-controller'
 
-export function captureOriginalDeliveryRetirement(directory: string): {
+export async function captureOriginalDeliveryRetirement(directory: string): Promise<{
   originalEpoch: string
   restartedEpoch: string
   event: MobileNotificationDismissEvent
-} {
+}> {
+  const scope = {
+    executionHostId: 'local',
+    wslDistro: null,
+    workspaceId: 'folder',
+    workspaceKind: 'folder'
+  } as const
   const original = new RuntimeMobileNotificationController()
   original.configureDismissalStore(directory)
   original.dispatch({
@@ -17,17 +23,13 @@ export function captureOriginalDeliveryRetirement(directory: string): {
     body: '',
     notificationId: 'same',
     structuredOrigin: {
-      scope: {
-        executionHostId: 'local',
-        wslDistro: null,
-        workspaceId: 'folder',
-        workspaceKind: 'folder'
-      },
+      scope,
       sessionId: 'session-a',
       journalCursor: { epoch: 'journal-a', sequence: 1 },
       cause: { kind: 'prompt', promptId: 'A' }
     }
   })
+  await original.closeDismissals()
   const restarted = new RuntimeMobileNotificationController()
   restarted.configureDismissalStore(directory)
   let event: MobileNotificationDismissEvent | undefined
@@ -36,10 +38,17 @@ export function captureOriginalDeliveryRetirement(directory: string): {
       event = value
     }
   })
-  restarted.retireStructuredAttention({
-    sessionId: 'session-a',
-    observedCursor: { epoch: 'journal-a', sequence: 1 }
+  restarted.acknowledgeAttention({
+    reads: [
+      {
+        scope,
+        sessionId: 'session-a',
+        observedCursor: { epoch: 'journal-a', sequence: 1 }
+      }
+    ]
   })
+  // Why: the caller deletes the directory next; an unflushed write would recreate it.
+  await restarted.closeDismissals()
   if (!event) {
     throw new Error('read did not withdraw the prompt')
   }

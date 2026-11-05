@@ -39,10 +39,12 @@ const znsData = {
   ],
   selection: { apps: [], proxy: true, host: '192.0.2.1' }
 }
-const parent = {
-  postMessage(message) {
-    calls.push(message)
-    const args = message.params.args
+win.orca = { plugin: {
+  on() {},
+  async request(name, args) {
+    if (name === 'workspace.presentation') return { presentation: null, visible: true, height: 1200 }
+    if (name !== 'launcher.request') return null
+    calls.push({ params: { args } })
     assert.doesNotThrow(() => JSON.stringify(args))
     const current = args.product === 'zns' ? znsData : cloudData
     if (args.action === 'saveSelection') {
@@ -56,18 +58,13 @@ const parent = {
     if (args.action === 'stop') current.runs[args.kind] = { id: 'run', state: 'stopped', code: 0 }
     const value =
       args.action === 'snapshot' ? current : args.action === 'status' ? current.runs : { ok: true }
-    const reply = () =>
-      win.dispatchEvent(
-        new win.MessageEvent('message', {
-          source: parent,
-          data: { type: 'orca-panel-action-result', requestId: message.requestId, ok: true, value }
-        })
-      )
-    if (holdStarts && args.action === 'start') startReplies.push(reply)
-    else queueMicrotask(reply)
+    return new Promise(resolve => {
+      const reply = () => resolve(value)
+      if (holdStarts && args.action === 'start') startReplies.push(reply)
+      else queueMicrotask(reply)
+    })
   }
-}
-Object.defineProperty(win, 'parent', { value: parent })
+} }
 const html = fs.readFileSync(fileURLToPath(new URL('./panel.html', import.meta.url)), 'utf8')
 const script = html.match(/<script>([\s\S]*)<\/script>/)[1]
 win.document.write(html.replace(/<script>[\s\S]*<\/script>/, ''))

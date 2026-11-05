@@ -1,9 +1,13 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { StructuredAttentionOrigin } from '../../../../shared/agent-session-attention'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import type { StructuredAttentionOrigin } from '../../../../shared/agent-session/agent-session-attention'
+import {
+  getStructuredAgentSessionHost,
+  setStructuredAgentSessionHost
+} from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { RuntimeMobileNotificationController } from '../../runtime-mobile-notification-controller'
 import {
   call,
@@ -14,12 +18,15 @@ import {
 } from './structured-agent-session-rpc.test-fixture'
 
 let directory: string
+let hostController: RuntimeMobileNotificationController | undefined
 beforeEach(() => {
   installStructuredHostStub()
   directory = mkdtempSync(join(tmpdir(), 'orca-attention-ack-'))
 })
-afterEach(() => {
+afterEach(async () => {
   clearStructuredHostStub()
+  await hostController?.closeDismissals()
+  hostController = undefined
   rmSync(directory, { recursive: true, force: true })
 })
 
@@ -35,6 +42,7 @@ const scope = (executionHostId: HostId): StructuredAttentionOrigin['scope'] => (
 function hostWithDeliveries() {
   const controller = new RuntimeMobileNotificationController()
   controller.configureDismissalStore(directory)
+  hostController = controller
   const dismissed: string[] = []
   controller.onDispatched((event) => {
     if (event.type === 'dismiss') {
@@ -59,9 +67,9 @@ function hostWithDeliveries() {
   deliver('read', prompt(SESSION, 'journal-a', 5))
   deliver('newer', prompt(SESSION, 'journal-a', 20))
   deliver('other-session', prompt('session-2', 'journal-b', 5))
-  // Another scope's journal for the same session id mints its own epoch.
-  deliver('other-scope', prompt(SESSION, 'journal-c', 5, 'runtime:remote'))
-  return { controller, dismissed }
+  // Restored host copies may share both session identity and journal epoch.
+  deliver('other-scope', prompt(SESSION, 'journal-a', 5, 'runtime:remote'))
+  return { controller, dismissed, deliver }
 }
 
 describe('agentSession.acknowledgeAttention', () => {
@@ -74,7 +82,10 @@ describe('agentSession.acknowledgeAttention', () => {
       { sessionId: SESSION, observedCursor: { epoch: 'journal-a', sequence: 10 } },
       STRUCTURED_CLIENT,
       {
-        retireStructuredAttention: controller.retireStructuredAttention.bind(controller),
+        acknowledgeNotificationAttention: controller.acknowledgeAttention.bind(controller),
+        openAgentSessionRecordStore: async () => ({
+          getConversation: () => ({ location: scope('local') })
+        }),
         ensureStructuredAgentSessionHost: install
       }
     )
@@ -91,11 +102,36 @@ describe('agentSession.acknowledgeAttention', () => {
       { sessionId: SESSION, observedCursor: { epoch: 'journal-a', sequence: 10 }, extra: true }
     ]) {
       const reply = await call('agentSession.acknowledgeAttention', params, STRUCTURED_CLIENT, {
-        retireStructuredAttention: retire
+        acknowledgeNotificationAttention: retire
       })
       expect(reply).toMatchObject({ ok: false })
     }
     expect(retire).not.toHaveBeenCalled()
+  })
+
+  it('uses the installed session location to preserve an identical journal in another WSL scope', async () => {
+    const { controller, dismissed, deliver } = hostWithDeliveries()
+    const host = getStructuredAgentSessionHost()
+    if (!host) {
+      throw new Error('host stub not installed')
+    }
+    vi.spyOn(host.attentionReads, 'sessionLocation').mockReturnValue(scope('local'))
+    deliver('wsl-copy', {
+      scope: { ...scope('local'), wslDistro: 'Ubuntu' },
+      sessionId: SESSION,
+      cause: { kind: 'prompt', promptId: 'copy' },
+      journalCursor: { epoch: 'journal-a', sequence: 5 }
+    })
+
+    const reply = await call(
+      'agentSession.acknowledgeAttention',
+      { sessionId: SESSION, observedCursor: { epoch: 'journal-a', sequence: 10 } },
+      STRUCTURED_CLIENT,
+      { acknowledgeNotificationAttention: controller.acknowledgeAttention.bind(controller) }
+    )
+
+    expect(reply).toMatchObject({ ok: true, result: { acknowledged: true } })
+    expect(dismissed).toEqual(['read'])
   })
 
   it('rejects a caller without structured capability before any work', async () => {
@@ -106,7 +142,7 @@ describe('agentSession.acknowledgeAttention', () => {
       'agentSession.acknowledgeAttention',
       { sessionId: SESSION, observedCursor: { epoch: 'journal-a', sequence: 10 } },
       { clientKind: 'runtime', clientCapabilities: [] },
-      { retireStructuredAttention: retire, ensureStructuredAgentSessionHost: install }
+      { acknowledgeNotificationAttention: retire, ensureStructuredAgentSessionHost: install }
     )
     expect(reply).toMatchObject({
       ok: false,

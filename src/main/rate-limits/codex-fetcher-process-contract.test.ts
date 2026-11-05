@@ -10,7 +10,12 @@ const { ptySpawnMock, resolveCodexCommandMock, stubScript } = vi.hoisted(() => (
   resolveCodexCommandMock: vi.fn()
 }))
 
-// Runs the node stub in place of the resolved CLI, through the real chokepoint.
+// Run the Node fixture through the real process chokepoint; worker transport has separate coverage.
+vi.mock(
+  '../worker-thread-child-process/worker-thread-child-process',
+  () =>
+    import('../worker-thread-child-process/worker-thread-child-process-in-process.test-fixtures')
+)
 vi.mock('@orca/process-host', async (importOriginal) => {
   const actual = await importOriginal<typeof RunProcess>()
   return {
@@ -36,11 +41,11 @@ vi.mock('./codex-auth-presence', () => ({
   probeCodexAuthPresence: vi.fn(() => 'present')
 }))
 
-vi.mock('../codex/codex-state-db', () => ({
+vi.mock('../codex/history/index/codex-state-db', () => ({
   isCodexStateDbBackfillPending: vi.fn(() => false)
 }))
 
-vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
+vi.mock('../codex/history/index/codex-state-db-backfill-recovery', () => ({
   startCodexStateDbBackfillRecoveryInBackground: vi.fn(() => Promise.resolve(null))
 }))
 

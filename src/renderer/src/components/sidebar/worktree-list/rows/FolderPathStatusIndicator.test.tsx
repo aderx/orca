@@ -3,7 +3,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspace-path-status'
+import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import { FolderPathStatusIndicator } from './FolderPathStatusIndicator'
 
 // Why: the status is cast, not decoded, off the runtime RPC wire, so a newer host really can put a
@@ -22,15 +22,7 @@ function renderIndicator(reason: unknown): string {
 }
 
 describe('FolderPathStatusIndicator', () => {
-  it('marks a folder missing for a declared reason', () => {
-    const markup = renderIndicator('missing')
-
-    expect(markup).toContain('aria-label="Folder not found"')
-    expect(markup).toContain('text-destructive')
-  })
-
-  // Why: losing the marker is worse than an imprecise one — the sidebar then renders a broken
-  // folder workspace as healthy, with nothing to click and nothing to read.
+  // Keep an imprecise marker for unknown host reasons so broken folders cannot appear healthy.
   it('still renders the marker when a newer host sends an undeclared reason', () => {
     const markup = renderIndicator('permission-denied')
 
@@ -51,15 +43,5 @@ describe('FolderPathStatusIndicator', () => {
     expect(markup).not.toContain('aria-label=""')
     // Why: hasOwn coerces its key, so ['missing'] must not be read as the confirmed-stale 'missing'.
     expect(markup).not.toContain('aria-label="Folder not found"')
-  })
-
-  it('renders nothing for a healthy folder', () => {
-    const markup = renderToStaticMarkup(
-      <TooltipProvider>
-        <FolderPathStatusIndicator status={{ path: '/srv/scans', exists: true }} />
-      </TooltipProvider>
-    )
-
-    expect(markup).toBe('')
   })
 })

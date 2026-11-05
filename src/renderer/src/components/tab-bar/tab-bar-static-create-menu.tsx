@@ -6,6 +6,9 @@ import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { MobileEmulatorTabIntroCallout } from '../emulator-pane/MobileEmulatorTabIntroCallout'
 import { ShellIcon } from './shell-icons'
+import { useAppStore } from '@/store'
+import { usePluginNewFiles } from '@/store/plugin-new-files'
+import { PluginContributionIcon } from '../plugins/PluginContributionIcon'
 import type { WindowsShellMenuEntry } from './tab-bar-windows-shell-options'
 import {
   isMacOs,
@@ -15,6 +18,7 @@ import type { TabBarProps } from './tab-bar-props'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 
 export function TabBarStaticCreateMenu({
+  groupId,
   terminalOnly,
   mobileEmulatorEnabled,
   managedBrowserCreationEnabled,
@@ -33,6 +37,7 @@ export function TabBarStaticCreateMenu({
   queueNewActiveTerminalFocusAfterNewTabMenuClose
 }: {
   props: TabBarProps
+  groupId: string
   terminalOnly: boolean
   mobileEmulatorEnabled: boolean
   managedBrowserCreationEnabled: boolean
@@ -156,6 +161,26 @@ export function TabBarStaticCreateMenu({
         <DropdownMenuShortcut>{newFileShortcut}</DropdownMenuShortcut>
       </DropdownMenuItem>
     ) : null
+  const pluginNewFiles = usePluginNewFiles()
+  const pluginNewFileMenuItems =
+    !terminalOnly && onNewFileTab
+      ? pluginNewFiles.map((newFile) => (
+          <DropdownMenuItem
+            key={newFile.key}
+            onSelect={() => {
+              void useAppStore.getState().openNewPluginFileInActiveWorkspace(newFile, groupId)
+            }}
+            className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+          >
+            <PluginContributionIcon
+              url={newFile.iconUrl}
+              fallback={FilePlus}
+              className="size-4 text-muted-foreground"
+            />
+            {newFile.title}
+          </DropdownMenuItem>
+        ))
+      : null
   const openMarkdownMenuItem =
     !terminalOnly && onOpenFileTab ? (
       <DropdownMenuItem
@@ -182,6 +207,7 @@ export function TabBarStaticCreateMenu({
   return newTabMenuOrder === 'markdown-first' ? (
     <>
       {newMarkdownMenuItem}
+      {pluginNewFileMenuItems}
       {openMarkdownMenuItem}
       {defaultTerminalMenuItems}
       {newBrowserMenuItem}
@@ -195,6 +221,7 @@ export function TabBarStaticCreateMenu({
       {newBrowserMenuItem}
       {!terminalOnly && <WorkspacePluginButton worktreeId={props.worktreeId} presentation="menu" />}
       {newMarkdownMenuItem}
+      {pluginNewFileMenuItems}
       {openMarkdownMenuItem}
       {newSimulatorMenuItem}
       {mobileEmulatorIntroMenuBlock}

@@ -1,9 +1,9 @@
 import { beforeEach, expect, it } from 'vitest'
 import { vi } from 'vitest'
-import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
+import { loadUpdaterModule, warmUpdaterModule } from './updater/testing/updater-test-module-loader'
 
 const { autoUpdaterMock, appMock, powerMonitorOnMock, moduleFactories, resetUpdaterMocks } =
-  await vi.hoisted(async () => (await import('./updater-test-harness')).createUpdaterMocks())
+  await vi.hoisted(async () => (await import('./updater/testing/updater-test-harness')).createUpdaterMocks())
 
 vi.mock('electron', () => moduleFactories.electron())
 vi.mock('electron-updater', () => moduleFactories.electronUpdater())

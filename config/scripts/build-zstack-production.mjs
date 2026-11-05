@@ -22,7 +22,7 @@ fs.mkdirSync(stage, { recursive: true })
 const info = {
   sourceRemote: git('remote', 'get-url', 'origin'), sourceRef: 'origin/dev', sourceHead, buildVersion,
   architecture: process.arch, startedAt: new Date().toISOString(),
-  reuse: 'Prepared main/preload/CLI/native resources with unchanged owning sources; renderer compiled from source'
+  reuse: 'Prepared CLI/native resources with unchanged owning sources; main/preload/renderer compiled from fetched dev'
 }
 fs.writeFileSync(path.join(output, 'BUILD-INFO.json'), JSON.stringify(info, null, 2))
 fs.writeFileSync(path.join(output, 'build-root.pid'), String(process.pid))
@@ -38,10 +38,11 @@ require('./out/main/index.js')
 `)
 fs.writeFileSync(path.join(recipe, 'renderer.config.mjs'), `
 import fs from 'node:fs'
-import base from ${JSON.stringify(path.join(repo, 'electron.vite.config.ts'))}
+import config from ${JSON.stringify(path.join(repo, 'electron.vite.config.ts'))}
+const base = typeof config === 'function' ? await config({ command: 'build', mode: 'production' }) : await config
 const packagePath = ${JSON.stringify(path.join(repo, 'package.json'))}
 const metadata = { ...JSON.parse(fs.readFileSync(packagePath, 'utf8')), buildVersion: ${JSON.stringify(buildVersion)} }
-export default { renderer: { ...base.renderer,
+export default { ...base, renderer: { ...base.renderer,
   plugins: [...base.renderer.plugins, { name: 'zstack-build-metadata', enforce: 'pre', load(id) { if (id === packagePath) return JSON.stringify(metadata) } }],
   build: { ...base.renderer.build, outDir: ${JSON.stringify(path.join(stage, 'renderer'))} }
 } }
@@ -68,7 +69,7 @@ const env = { ...process.env, ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1',
   SDKROOT: '/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk',
   CPLUS_INCLUDE_PATH: '/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1',
   ORCA_COMPUTER_MACOS_BUNDLE_ID: 'local.orca.zstack.computer-use' }
-for (const key of ['ELECTRON_RUN_AS_NODE', 'ORCA_BACKGROUND_LAUNCH', 'ORCA_LOCAL_BUILD_VERSION', 'VITE_EXPOSE_STORE']) delete env[key]
+for (const key of ['ELECTRON_RUN_AS_NODE', 'ORCA_BACKGROUND_LAUNCH', 'ORCA_LOCAL_BUILD_VERSION', 'VITE_EXPOSE_STORE', 'ORCA_ELECTRON_VITE_TARGET']) delete env[key]
 async function run(args, extraEnv = {}) {
   const child = spawn(process.execPath, args, { cwd: repo, env: { ...env, ...extraEnv }, stdio: 'inherit' })
   await new Promise((resolve, reject) => {
@@ -77,8 +78,8 @@ async function run(args, extraEnv = {}) {
   })
 }
 console.log(`Building ${buildVersion} from origin/dev ${sourceHead}`)
-await run(['--max-old-space-size=2048', 'node_modules/electron-vite/bin/electron-vite.js', 'build', '--config', path.join(recipe, 'renderer.config.mjs')], { ORCA_ELECTRON_VITE_TARGET: 'renderer' })
+await run(['--max-old-space-size=2048', 'node_modules/electron-vite/bin/electron-vite.js', 'build', '--config', path.join(recipe, 'renderer.config.mjs')])
 await run(['node_modules/electron-builder/cli.js', '--config', path.join(recipe, 'electron-builder.cjs'), '--mac', '--arm64', '--dir', '--publish', 'never'])
 info.completedAt = new Date().toISOString()
 fs.writeFileSync(path.join(output, 'BUILD-INFO.json'), JSON.stringify(info, null, 2))
-console.log(`Packaged: ${path.join(output, 'production/mac-arm64/Orca.app')}`)
+console.log(`Packaged: ${path.join(output, 'production/mac-arm64/Orca ZStack.app')}`)

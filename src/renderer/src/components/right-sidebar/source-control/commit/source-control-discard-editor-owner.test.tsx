@@ -3,20 +3,20 @@ import { act, renderHook } from '@testing-library/react'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { beforeEach, expect, it, vi } from 'vitest'
-import type { EditorPathMutationTarget } from '@/components/editor/editor-autosave'
+import type { EditorPathMutationTarget } from '@/components/editor/autosave/editor-autosave'
 
 const mocks = vi.hoisted(() => {
   const focus: { value: string | null } = { value: null }
   return {
     focus,
-    quiesce: vi.fn<(target: EditorPathMutationTarget) => Promise<void>>(),
+    quiesce: vi.fn<(target: EditorPathMutationTarget) => Promise<() => void>>(),
     notify: vi.fn<(target: EditorPathMutationTarget) => void>(),
     discard: vi.fn(),
     bulkDiscard: vi.fn()
   }
 })
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => undefined }))
-vi.mock('@/components/editor/editor-autosave', () => ({
+vi.mock('@/components/editor/autosave/editor-autosave', () => ({
   requestEditorSaveQuiesce: mocks.quiesce,
   notifyEditorExternalFileChange: mocks.notify
 }))
@@ -46,11 +46,12 @@ for (const bulk of [false, true]) {
     async ({ owner, focus }) => {
       mocks.focus.value = focus
       let release: () => void = () => {}
-      const pendingSave = new Promise<void>((resolve) => {
-        release = resolve
+      const releaseHold = (): void => {}
+      const pendingSave = new Promise<() => void>((resolve) => {
+        release = () => resolve(releaseHold)
       })
       mocks.quiesce.mockImplementation((target) =>
-        target.runtimeEnvironmentId === owner ? pendingSave : Promise.resolve()
+        target.runtimeEnvironmentId === owner ? pendingSave : Promise.resolve(releaseHold)
       )
       const activeRepoTarget: RuntimeClientTarget | null = runtimeTargetForOwnerEnvironment(owner)
       const { result } = renderHook(() =>

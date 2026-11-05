@@ -1,54 +1,50 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { StructuredAgentSessionSendSettlement } from './structured-agent-session-send-settlement'
+import {
+  StructuredAgentSessionSendSettlement,
+  type SendSettlementJournal
+} from './structured-agent-session-send-settlement'
 
-function journal(dispatchState: 'pending' | 'accepted' | 'unknown'): AgentSessionJournal {
+function journal(dispatchState: 'pending' | 'accepted' | 'unknown'): SendSettlementJournal {
   return {
+    activeTurnId: () => null,
     cursor: () => ({ epoch: 'epoch-1', sequence: dispatchState === 'pending' ? 1 : 2 }),
-    submissions: () => [
-      {
-        clientMessageId: 'client-1',
-        fence: 1,
-        payloadFingerprint: 'fingerprint',
-        dispatchState,
-        providerItemId: dispatchState === 'accepted' ? 'provider-1' : null,
-        reason: dispatchState === 'unknown' ? 'provider exited' : null,
-        submittedAt: 1,
-        resolvedAt: dispatchState === 'pending' ? null : 2
-      }
-    ]
-  } as AgentSessionJournal
+    submission: () => ({
+      clientMessageId: 'client-1',
+      fence: 1,
+      payloadFingerprint: 'fingerprint',
+      dispatchState,
+      providerItemId: dispatchState === 'accepted' ? 'provider-1' : null,
+      reason: dispatchState === 'unknown' ? 'provider exited' : null,
+      submittedAt: 1,
+      resolvedAt: dispatchState === 'pending' ? null : 2
+    })
+  }
 }
 
-function emptyJournal(): AgentSessionJournal {
+function emptyJournal(): SendSettlementJournal {
   return {
+    activeTurnId: () => null,
     cursor: () => ({ epoch: 'epoch-1', sequence: 2 }),
-    submissions: () => []
-  } as unknown as AgentSessionJournal
+    submission: () => undefined
+  }
 }
 
-/** A message accepted and not yet handed over, while `activeTurnId` names the running turn. */
-function queuedJournal(
-  activeTurnId: string | null,
-  handedOver = false
-): Pick<AgentSessionJournal, 'submissions' | 'cursor' | 'activeTurnId'> {
+function queuedJournal(activeTurnId: string | null, handedOver = false): SendSettlementJournal {
   return {
     cursor: () => ({ epoch: 'epoch-1', sequence: handedOver ? 3 : 2 }),
     activeTurnId: () => activeTurnId,
-    submissions: () => [
-      {
-        clientMessageId: 'client-1',
-        fence: 1,
-        payloadFingerprint: 'fingerprint',
-        dispatchState: 'pending',
-        providerItemId: null,
-        reason: null,
-        submittedAt: 1,
-        resolvedAt: null,
-        handoverRecorded: true,
-        ...(handedOver ? { handedOverAt: 3 } : {})
-      }
-    ]
+    submission: () => ({
+      clientMessageId: 'client-1',
+      fence: 1,
+      payloadFingerprint: 'fingerprint',
+      dispatchState: 'pending',
+      providerItemId: null,
+      reason: null,
+      submittedAt: 1,
+      resolvedAt: null,
+      handoverRecorded: true,
+      ...(handedOver ? { handedOverAt: 3 } : {})
+    })
   }
 }
 

@@ -1,5 +1,16 @@
 # 定制功能开发与上游升级
 
+### 2026-11-05 main 同步与 FE 列表刷新
+
+- 本轮目标 main：`2536c1d569f761915052cfcf3a1f22717d913a96`，从个人 `origin` 获取。原生插件仍不能完整复现当前定制交互；以下按该提交的源码重新评估，不沿用旧版结论。
+- 官方已有：`src/shared/plugins/workers/plugin-host-api-workspace-methods.ts` 的 `workspace.list`（包含路径与主机）、`terminal.create`（后台创建）、工作区/文件打开；`plugin-host-api-panel-methods.ts` 的 `plugin.request`；`contributions/plugin-status-bar-item-contribution.ts` 的状态栏入口。面板及 worker 通信已改用官方 `window.orca.plugin.request` / `orca.panels.handle`，移除旧 `commands.invoke` 适配。
+- 仍缺少：顶部 BFF/FE 弹窗、主工作区服务 TAB 与空工作树初始面板扩展位，及原生浏览器 TAB、插件所属终端的定位/关闭权限接口。官方侧栏/状态栏可替代部分入口，但交互不等价；依据为 `src/shared/plugins/contributions/plugin-contribution-points.ts` 与 `src/shared/plugins/workers/plugin-host-api.ts` 的贡献点及方法清单。
+- 保留既有宿主适配并迁入新框架：`terminal.createOwned`、`terminal.focusOwned`、`terminal.closeOwned`、`browser.open`，权限仍为 `terminal:manage` / `browser:open`；使用上游 runtime RPC、授权复核、取消和审计流程。将旧定制 `terminal.create` 改名，避免覆盖官方同名接口。`use-workspace-plugin-frame.ts` 只承接既有工作区绑定、弹窗高度、通知与关闭交互；HTML 面板使用上游隔离 guest。
+- 应用名称、独立数据目录、构建号及禁止自动安装官方更新仍属宿主/打包配置，普通插件不能等价替代。保留 `local.orca.zstack` 与 Orca ZStack 数据目录，不迁移原版 Orca 数据。
+- FE 搜索工具栏新增“刷新前端模块”，复用 `snapshot(refresh: true, expanded: true)` 强制重读模块目录及当前分支变更。保留搜索、有效手动选择和取消自动勾选的偏好；刷新中显示加载状态并禁止重复请求，失败恢复按钮并提示。根 AGENTS.md 已要求每次合并 main 重做本节评估。
+- 本轮 CLI 与桌面必要编译完成；`plugin-workspace-extension.test.ts` 5 项通过。新版 Electron guest 的 CDP 检查通过刷新参数、防重复点击、模拟分支模块更新及自动选择、无横向溢出与底部裁切；截图确认刷新入口及布局。新面板已使用官方 `--orca-*` 设计变量。页面请求全部在内存拦截，未启动真实 FE/BFF、未写入项目配置，终端会话不变。
+- 版本分支 `xfu-dev/20261105.1`；生产配方由重新获取的 `origin/dev` 编译 main/preload/renderer，复用对应源码未变化的 CLI/原生资源，再打包当前 Mac arm64。构建号 `20261105.1`。
+
 ### 2026-10-20 辅助失败不阻断主服务
 
 - 启动与重启合并为同一流程：尝试停止历史任务，能复用则复用原终端，失败后 toast 并自动新建终端。历史 PID、状态不明和旧的停止中记录不再阻止启动；发信号前核对运行器命令及对应运行文件，避免 PID 复用后误停其他程序。
@@ -293,7 +304,7 @@
 ## 源码升级流程
 
 1. 先审计工作区和 remotes。`origin` 通常是个人 fork，`upstream` 通常是官方仓库，但必须看实际 URL；不要根据名称自动改写已有 remote。
-2. 用户要求升级时，获取明确的上游分支或版本，记录升级前 HEAD 和目标 commit/tag。不得把旧的分支名或一次会话中的 commit 固定成永久基线。
+2. 用户要求升级时，获取明确的上游分支或版本，记录升级前 HEAD 和目标 commit/tag。不得把旧的分支名或一次会话中的 commit 固定成永久基线。每次合并或同步 main 前，按根 AGENTS.md 的“每次合并 main 前检查原生插件能力”重新核对目标 main，记录纯插件完整复现的可行性、证据和剩余宿主缺口。
 3. 在升级分支或隔离 checkout 中合并上游；保留可回退点，不用 `reset --hard` 覆盖定制开发或用户未提交内容，不未经授权重写已发布历史。
 4. 分别审查插件接口、TAB/终端生命周期、权限与主机路由、日志和打包更新配置的冲突。上游已有同等能力时优先采用官方实现，并在验证后移除重复适配。
 5. 按当前交付流程自动启动开发版并聚焦检查本次改动；通过后将版本分支合并并推送 dev，从重新获取的远端 dev 提交构建并替换本 fork 的本地应用，不再等待额外测试或构建许可。开发版与现用应用的数据和进程应隔离。

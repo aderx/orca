@@ -6,8 +6,8 @@
     margin: 0;
     height: 100vh;
     overflow: hidden;
-    background: var(--background);
-    color: var(--foreground);
+    background: var(--orca-background);
+    color: var(--orca-foreground);
     font:
       13px Geist,
       sans-serif;
@@ -33,7 +33,7 @@
     margin: 16px 0 8px;
   }
   .muted {
-    color: var(--muted-foreground);
+    color: var(--orca-muted-foreground);
   }
   .path {
     font: 12px var(--font-mono, monospace);
@@ -61,8 +61,8 @@
     flex-direction: column;
     min-width: 0;
     min-height: 0;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border: 1px solid var(--orca-border);
+    border-radius: var(--orca-radius);
     padding: 14px;
     overflow: hidden;
   }
@@ -97,7 +97,7 @@
     border-color: transparent;
   }
   .alphabet button[aria-pressed='true'] {
-    background: var(--accent);
+    background: var(--orca-accent);
   }
   .service-toggle {
     display: inline-flex;
@@ -129,8 +129,8 @@
   .module-group {
     margin: 0;
     padding: 8px;
-    background: var(--muted);
-    color: var(--muted-foreground);
+    background: var(--orca-muted);
+    color: var(--orca-muted-foreground);
   }
   .module-browser .modules {
     margin: 0;
@@ -184,7 +184,7 @@
     padding: 4px;
     border: 0;
     background: transparent;
-    color: var(--muted-foreground);
+    color: var(--orca-muted-foreground);
   }
   .search-clear svg {
     display: block;
@@ -215,22 +215,22 @@
   textarea,
   select {
     font: inherit;
-    border: 1px solid var(--border);
+    border: 1px solid var(--orca-border);
     border-radius: var(--radius-md, 6px);
-    background: var(--background);
-    color: var(--foreground);
+    background: var(--orca-background);
+    color: var(--orca-foreground);
     padding: 7px 10px;
   }
   button {
     cursor: pointer;
   }
   button:hover {
-    background: var(--accent);
+    background: var(--orca-accent);
   }
   button.primary {
-    background: var(--primary);
-    color: var(--primary-foreground);
-    border-color: var(--primary);
+    background: var(--orca-primary);
+    color: var(--orca-primary-foreground);
+    border-color: var(--orca-primary);
   }
   button.quiet,
   button.danger-ghost {
@@ -241,7 +241,7 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    color: var(--destructive);
+    color: var(--orca-destructive);
   }
   .danger-ghost svg {
     width: 16px;
@@ -249,12 +249,12 @@
   }
   button.quiet:hover,
   button.danger-ghost:hover {
-    background: var(--accent);
+    background: var(--orca-accent);
   }
   button.destructive {
-    color: var(--destructive-foreground);
-    background: var(--destructive);
-    border-color: var(--destructive);
+    color: var(--orca-destructive-foreground);
+    background: var(--orca-destructive);
+    border-color: var(--orca-destructive);
   }
   button[hidden] {
     display: none;
@@ -270,12 +270,12 @@
   input:focus-visible,
   textarea:focus-visible,
   select:focus-visible {
-    outline: 2px solid var(--ring);
+    outline: 2px solid var(--orca-ring);
     outline-offset: 2px;
   }
   input[type='checkbox'],
   input[type='radio'] {
-    accent-color: var(--primary);
+    accent-color: var(--orca-primary);
   }
   .advanced-toggle {
     display: inline-flex;
@@ -285,7 +285,7 @@
     height: 32px;
     padding: 0 4px;
     font-size: 12px;
-    color: var(--muted-foreground);
+    color: var(--orca-muted-foreground);
   }
   .advanced-toggle svg { width: 14px; height: 14px; }
   .advanced-settings { margin-top: 12px; min-height: 0; }
@@ -293,7 +293,7 @@
   .advanced-fields { max-height: 200px; overflow-y: auto; scrollbar-width: thin; padding: 2px 4px 2px 2px; }
   .environment-group + .environment-group { margin-top: 16px; }
   .environment-group h3 { margin: 0 0 8px; font-size: 12px; }
-  .environment-description { margin: 0 0 8px; font-size: 12px; color: var(--muted-foreground); white-space: pre-line; overflow-wrap: anywhere; }
+  .environment-description { margin: 0 0 8px; font-size: 12px; color: var(--orca-muted-foreground); white-space: pre-line; overflow-wrap: anywhere; }
   .environment-field { display: grid; grid-template-columns: minmax(0, 44%) minmax(0, 1fr); align-items: center; gap: 8px; margin-top: 8px; }
   .environment-key { font: 11px var(--font-mono, monospace); overflow-wrap: anywhere; }
   .environment-field input, .environment-field textarea { width: 100%; min-width: 0; font-size: 12px; padding: 6px 8px; }
@@ -305,12 +305,12 @@
   button.switch {
     display: inline-flex; align-items: center; flex-shrink: 0;
     width: 36px; height: 20px; padding: 2px; border: 1px solid transparent; border-radius: 9999px;
-    background: color-mix(in srgb, var(--muted-foreground) 30%, transparent);
+    background: color-mix(in srgb, var(--orca-muted-foreground) 30%, transparent);
     transition: background-color 150ms;
   }
-  button.switch[aria-checked='true'] { background: var(--foreground); }
+  button.switch[aria-checked='true'] { background: var(--orca-foreground); }
   .switch-thumb {
-    width: 14px; height: 14px; border-radius: 9999px; background: var(--background);
+    width: 14px; height: 14px; border-radius: 9999px; background: var(--orca-background);
     pointer-events: none; transition: transform 150ms;
   }
   .switch[aria-checked='true'] .switch-thumb { transform: translateX(16px); }
@@ -333,10 +333,10 @@
     align-items: center;
     gap: 8px;
     padding: 10px 6px;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--orca-border);
   }
   .server[data-current='true'] {
-    background: var(--accent);
+    background: var(--orca-accent);
   }
   .server-choice {
     display: flex;
@@ -383,12 +383,12 @@
     align-items: center;
     gap: 8px;
     padding: 8px;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--orca-border);
   }
   .module[data-located='true'],
   .server[data-located='true'] {
-    background: var(--accent);
-    outline: 1px solid var(--ring);
+    background: var(--orca-accent);
+    outline: 1px solid var(--orca-ring);
     outline-offset: -1px;
   }
   .module label {
@@ -409,7 +409,7 @@
     padding: 3px 6px;
   }
   .badge {
-    border: 1px solid var(--border);
+    border: 1px solid var(--orca-border);
     border-radius: 20px;
     padding: 3px 8px;
     font-size: 11px;
@@ -424,14 +424,14 @@
     max-width: 540px;
     width: 90%;
     max-height: 85vh;
-    background: var(--background);
-    color: var(--foreground);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
+    background: var(--orca-background);
+    color: var(--orca-foreground);
+    border: 1px solid var(--orca-border);
+    border-radius: var(--orca-radius);
     padding: 20px;
   }
   dialog::backdrop {
-    background: var(--background);
+    background: var(--orca-background);
     opacity: 0.7;
   }
   dialog label {
@@ -469,8 +469,8 @@
 </style>
 <style>
   html[data-orca-presentation] body {
-    background: var(--popover);
-    color: var(--popover-foreground);
+    background: var(--orca-popover);
+    color: var(--orca-popover-foreground);
   }
   html[data-orca-presentation] body { height: auto; }
   html[data-orca-presentation] main { height: auto; padding: 16px; gap: 0; }
@@ -499,7 +499,7 @@
     gap: 8px;
     margin-top: 12px;
     padding-top: 12px;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--orca-border);
   }
   .popover-footer .info { margin: 0; font-size: 12px; }
   .popover-footer .info:empty { display: none; }
@@ -507,16 +507,16 @@
   .popover-actions #product { width: 172px; max-width: none; flex-shrink: 1; font-size: 12px; padding: 3px 6px; }
   .popover-actions .service-toggle { width: 112px; flex-shrink: 0; height: 32px; padding: 0 12px; }
   .popover-actions .service-actions { margin-left: auto; display: flex; flex-shrink: 0; gap: 4px; }
-  .service-restart { color: var(--muted-foreground); white-space: nowrap; }
+  .service-restart { color: var(--orca-muted-foreground); white-space: nowrap; }
   .service-open:not([hidden]), #addServer:not([hidden]) { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
   .popover-actions .service-open, .popover-actions .service-restart, #addServer { height: 32px; padding: 0 8px; }
   html[data-orca-presentation] dialog { max-height: calc(var(--picker-height-limit, 600px) - 32px); }
   html[data-orca-presentation] dialog .spaced { margin-top: 16px; }
   html[data-orca-presentation='fe'] .popover-actions #product { flex: 1; width: 0; min-width: 64px; }
-  .list-toggle { color: var(--muted-foreground); }
-  .picker-summary { margin: 0; padding: 4px 0; font-size: 12px; line-height: 16px; overflow: auto; scrollbar-width: thin; color: var(--muted-foreground); }
+  .list-toggle { color: var(--orca-muted-foreground); }
+  .picker-summary { margin: 0; padding: 4px 0; font-size: 12px; line-height: 16px; overflow: auto; scrollbar-width: thin; color: var(--orca-muted-foreground); }
   .picker-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
-  .picker-tags .badge { max-width: 100%; padding: 2px 8px; font-size: 12px; font-weight: 500; overflow-wrap: anywhere; border-color: transparent; background: var(--secondary); color: var(--secondary-foreground); }
+  .picker-tags .badge { max-width: 100%; padding: 2px 8px; font-size: 12px; font-weight: 500; overflow-wrap: anywhere; border-color: transparent; background: var(--orca-secondary); color: var(--orca-secondary-foreground); }
   html[data-orca-presentation] .picker-list { flex: none; }
   html[data-orca-presentation] .picker-list[hidden],
   .picker-tools[hidden] { display: none; }
@@ -538,10 +538,10 @@
     border-bottom: none;
     border-radius: var(--radius-md, 6px);
   }
-  html[data-orca-presentation] .module:hover { background: var(--accent); }
+  html[data-orca-presentation] .module:hover { background: var(--orca-accent); }
   html[data-orca-presentation] .module-details { flex: 1; flex-wrap: nowrap; gap: 6px; }
   html[data-orca-presentation] .module-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  html[data-orca-presentation] .module button { flex-shrink: 0; padding: 2px 5px; font-size: 11px; color: var(--muted-foreground); }
+  html[data-orca-presentation] .module button { flex-shrink: 0; padding: 2px 5px; font-size: 11px; color: var(--orca-muted-foreground); }
   html[data-orca-presentation] .module small { font-size: 11px; font-variant-numeric: tabular-nums; }
   html[data-orca-presentation] .module-group {
     position: sticky;
@@ -550,12 +550,12 @@
     padding: 4px 6px;
     margin: 0;
     font-size: 11px;
-    background: var(--popover);
+    background: var(--orca-popover);
   }
   html[data-orca-presentation] .alphabet { align-self: stretch; min-height: 0; gap: 0; padding: 3px 0; }
   html[data-orca-presentation] .alphabet button { flex: 1 0 16px; min-width: 20px; min-height: 16px; padding: 0; line-height: 1; }
   html[data-orca-presentation] .server { padding: 10px 6px; border-radius: var(--radius-md, 6px); border-bottom: none; }
-  html[data-orca-presentation] .server:hover { background: var(--accent); }
+  html[data-orca-presentation] .server:hover { background: var(--orca-accent); }
   html[data-orca-presentation] .server input { margin: 0; }
   html[data-orca-presentation] .server .badge { padding: 1px 5px; }
   @media (max-width: 360px) {
@@ -606,6 +606,7 @@
       <div class="row spaced product-controls">
         <button id="selectAll" class="icon-button" role="checkbox" aria-checked="false" aria-label="全选" title="全选"></button>
         <button id="locateSelected" class="icon-button" aria-label="选择变更模块" title="选择变更模块"></button>
+        <button id="refreshModules" class="icon-button" aria-label="刷新前端模块" title="刷新前端模块"></button>
         <div class="search-field">
           <input id="search" placeholder="搜索模块 / 端口" aria-label="搜索前端模块" />
           <button id="searchClear" class="search-clear" aria-label="清空前端搜索" hidden></button>
@@ -647,11 +648,13 @@
   </div>
 </dialog>
 <script>
+;(async () => {
+  const initialPresentation = await window.orca.plugin.request('workspace.presentation')
+  if (initialPresentation.presentation) document.documentElement.dataset.orcaPresentation = initialPresentation.presentation
+
   const $ = (id) => document.getElementById(id)
   const presentation = document.documentElement.dataset.orcaPresentation || null
-  const pending = new Map()
-  let sequence = 0,
-    snapshot,
+  let snapshot,
     selected = new Set(),
     selectedHost = '',
     busy = false,
@@ -667,52 +670,24 @@
     (!snapshot.runs[presentation] || finished.has(snapshot.runs[presentation].state))
   let checksPending = false, lastStatusError = ''
   let pickerFrame = 0, maxPanelHeight = 1200
-  window.addEventListener('message', (event) => {
-    if (event.source !== parent) return
-    if (event.data?.type === 'orca-panel-height-limit' && Number.isFinite(event.data.height)) {
-      if (maxPanelHeight !== event.data.height) {
-        maxPanelHeight = event.data.height
-        document.documentElement.style.setProperty('--picker-height-limit', `${maxPanelHeight}px`)
-        schedulePickerSize()
-      }
-      return
+  function updatePresentation(value) {
+    if (Number.isFinite(value.height) && maxPanelHeight !== value.height) {
+      maxPanelHeight = value.height
+      document.documentElement.style.setProperty('--picker-height-limit', `${maxPanelHeight}px`)
+      schedulePickerSize()
     }
-    if (event.data?.type === 'orca-panel-visibility' && typeof event.data.visible === 'boolean') {
-      const resuming = !panelVisible && event.data.visible
-      panelVisible = event.data.visible
-      if (resuming) refreshStatus()
-      return
-    }
-    if (event.data?.type !== 'orca-panel-action-result') return
-    const callback = pending.get(event.data.requestId)
-    if (!callback) return
-    clearTimeout(callback.timer)
-    pending.delete(event.data.requestId)
-    event.data.ok
-      ? callback.resolve(event.data.value)
-      : callback.reject(new Error(event.data.error))
-  })
+    const resuming = !panelVisible && value.visible
+    panelVisible = value.visible
+    if (resuming) refreshStatus()
+  }
+  window.orca.plugin.on('workspace.presentation', updatePresentation)
+  updatePresentation(initialPresentation)
   function request(args) {
-    return new Promise((resolve, reject) => {
-      const requestId = String(++sequence)
-      const timer = setTimeout(() => {
-        pending.delete(requestId)
-        reject(new Error('响应超时，请刷新确认结果'))
-      }, 60000)
-      pending.set(requestId, { resolve, reject, timer })
-      parent.postMessage(
-        {
-          type: 'orca-panel-action',
-          requestId,
-          action: 'commands.invoke',
-          params: {
-            commandId: 'launcher.request',
-            args: JSON.parse(JSON.stringify({ product: $('product').value, ...args }))
-          }
-        },
-        '*'
-      )
-    })
+    return window.orca.plugin.request('launcher.request',
+      JSON.parse(JSON.stringify({ product: $('product').value, ...args })), { timeoutMs: 60000 })
+  }
+  function hostView(name, input) {
+    void window.orca.plugin.request('workspace.' + name, input).catch(console.error)
   }
   function text(tag, value, className) {
     const element = document.createElement(tag)
@@ -722,8 +697,7 @@
   }
   function notice(message) {
     if (!message) return
-    parent.postMessage({ type: 'orca-panel-notice',
-      message: message.replace(/^Error:\s*/, '').split(/\n\s*at\s/)[0].slice(0, 1000) }, '*')
+    hostView('notice', { message: message.replace(/^Error:\s*/, '').split(/\n\s*at\s/)[0].slice(0, 1000) })
   }
   async function action(fn, service, operation) {
     if (busy || (service && serviceActions.has(service))) return
@@ -746,7 +720,7 @@
   }
   let activeLetter = '', locatedModule = '', locatedHost = ''
   let locateAfterLoad = Boolean(presentation)
-  let changedApps = [], autoChanged = true
+  let changedApps = [], autoChanged = true, refreshingModules = false
   let advancedExpanded = false, environment = null, advancedListScrollTop = 0
   let sshForward = true, sshPassword = 'password', hostBeforeForwarding = ''
   const environmentValues = new Map()
@@ -1273,7 +1247,7 @@
   }
   async function submitService(args) {
     await request(args)
-    if (presentation) parent.postMessage({ type: 'orca-panel-dismiss' }, '*')
+    if (presentation) hostView('dismiss')
   }
   function icon(name) {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
@@ -1313,6 +1287,11 @@
   function renderRuns() {
     for (const id of ['product', 'refresh', 'deleteServer', 'closeEditor', 'cancelDelete', 'confirmDelete'])
       $(id).disabled = busy || (['product', 'refresh'].includes(id) && serviceActions.size > 0)
+    const refresh = $('refreshModules'), symbol = icon(refreshingModules ? 'loading' : 'refresh')
+    refresh.disabled = busy || serviceActions.size > 0
+    refresh.setAttribute('aria-busy', String(refreshingModules))
+    if (refreshingModules) symbol.classList.add('loading')
+    refresh.replaceChildren(symbol)
     renderSelectedNavigation()
     renderEditorSave()
     renderAdvanced()
@@ -1396,9 +1375,15 @@
     }, kind, 'restart')
   }
   $('refresh').onclick = () => action(() => load(true))
+  $('refreshModules').onclick = () => action(async () => {
+    refreshingModules = true
+    renderRuns()
+    try { await load(true, true) }
+    finally { refreshingModules = false }
+  })
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && presentation && !document.querySelector('dialog[open]'))
-      parent.postMessage({ type: 'orca-panel-dismiss' }, '*')
+      hostView('dismiss')
   })
 
   $('product').onchange = () =>
@@ -1628,6 +1613,7 @@
     summary.scrollTop = scrollTop
     schedulePickerSize()
   }
+  let reportedHeight = 0
   function schedulePickerSize() {
     if (!presentation || pickerFrame) return
     pickerFrame = requestAnimationFrame(() => {
@@ -1649,7 +1635,11 @@
       const dialogs = [...document.querySelectorAll('dialog[open]')]
       const height = Math.max(main.getBoundingClientRect().height,
         ...dialogs.map((dialog) => dialog.scrollHeight + 34))
-      parent.postMessage({ type: 'orca-panel-height', height: Math.ceil(Math.min(height, maxPanelHeight)) }, '*')
+      const nextHeight = Math.ceil(Math.min(height, maxPanelHeight))
+      if (reportedHeight !== nextHeight) {
+        reportedHeight = nextHeight
+        hostView('height', { height: nextHeight })
+      }
     })
   }
   window.addEventListener('resize', schedulePickerSize)
@@ -1682,7 +1672,7 @@
     const header = section.querySelector('.toolbar')
     header.classList.add('popover-header')
     const tools = text('div', '', 'picker-tools')
-    if (presentation === 'fe') tools.append($('selectAll'), $('locateSelected'))
+    if (presentation === 'fe') tools.append($('selectAll'), $('locateSelected'), $('refreshModules'))
     else tools.append($('locateServer'), $('checkServers'))
     tools.append($(presentation === 'bff' ? 'serverSearch' : 'search').closest('.search-field'))
     header.append(tools)
@@ -1722,4 +1712,5 @@
     renderPicker()
   }
   action(() => load(Boolean(presentation)))
+})().catch(console.error)
 </script>

@@ -4,9 +4,9 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { registerAgentSubjectReadCapture } from '@/attention/agent-subject-read-actions'
 import ActivityPrototypePage from './ActivityPrototypePage'
@@ -104,8 +104,7 @@ function seedThreadStampedByLocalClock(): void {
   seedRetainedThread(Date.now() - 60_000, 'finished locally')
 }
 
-// Why: an SSH/remote execution host stamps the turn with its own clock, so the renderer can
-// acknowledge a thread whose event still sorts as newer than the acknowledgement.
+// Remote clock skew can place a turn after the local acknowledgement time.
 function seedThreadStampedAheadOfLocalClock(): void {
   seedRetainedThread(Date.now() + 60_000, 'finished on the execution host')
 }
@@ -176,7 +175,6 @@ describe('Activity auto mark-read loop (React #185)', () => {
       await selectSeededThread()
       expect(acknowledgeWrites.count()).toBe(1)
 
-      // Why: the per-turn guard must not swallow the next turn's auto mark-read.
       const nextTurnAt = Date.now() + 120_000
       await act(async () => {
         useAppStore.setState((s) => {
@@ -220,9 +218,7 @@ describe('Activity auto mark-read loop (React #185)', () => {
     await mountActivityPage()
     await selectSeededThread()
 
-    // Why pinned: auto mark-read is once per turn, so an explicit mark-unread on the
-    // still-selected thread must survive — a guard keyed on unread instead of the turn
-    // would silently re-acknowledge it and make the menu action a no-op.
+    // Once-per-turn auto-read must preserve a later explicit mark-unread on the still-selected thread.
     await act(async () => {
       useAppStore.getState().unacknowledgeAgents([PANE_A])
       await new Promise((resolve) => setTimeout(resolve, 50))

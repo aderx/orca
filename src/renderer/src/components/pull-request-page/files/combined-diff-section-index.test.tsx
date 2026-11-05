@@ -21,7 +21,9 @@ vi.mock('../../editor/combined-diff/browse-files/combined-diff-file-tree', () =>
   }
 }))
 
-vi.mock('@/components/editor/DiffSectionItem', () => ({ DiffSectionItem: () => null }))
+vi.mock('@/components/editor/diff/sections/DiffSectionItem', () => ({
+  DiffSectionItem: () => null
+}))
 vi.mock('./toolbar', () => ({ PRFilesDiffToolbar: () => null }))
 vi.mock('./view-restore', () => ({ usePRFilesDiffViewPersistence: () => {} }))
 
@@ -31,8 +33,7 @@ vi.mock('./section-loader', () => ({
   }: {
     setSections: (updater: (prev: { key: string; loading: boolean }[]) => unknown) => void
   }) => {
-    // Why: stands in for the network fetch, keeping only the state shape a real load produces —
-    // a new sections array with one patched section and untouched keys.
+    // Simulate a fetched section patch with new array identity and unchanged section keys.
     loaders.loadSection = (index: number) => {
       setSections((prev) =>
         prev.map((section, sectionIndex) =>

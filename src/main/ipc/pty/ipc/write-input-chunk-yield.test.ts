@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { TERMINAL_INPUT_CHUNK_MAX_BYTES } from '../../../../shared/terminal-input'
+import { TERMINAL_INPUT_CHUNK_MAX_BYTES } from '../../../../shared/terminal/input/terminal-input'
 import { ptyOwnership } from '../provider/ownership-state'
 import { createPtyWriteInput } from './write-input'
 
@@ -45,8 +45,7 @@ beforeEach(() => {
   ptyOwnership.set(PTY_ID, 'local')
   provider.write.mockReset()
   mainWindow.webContents.send.mockReset()
-  // Why: only setTimeout is faked. A setTimeout(0) yield would stall the write forever here,
-  // while a setImmediate yield still runs in Node's check phase — the race below is deterministic.
+  // Fake timers make timer-based yields stall while setImmediate still runs, proving check-phase yielding.
   vi.useFakeTimers({ toFake: ['setTimeout'] })
 })
 

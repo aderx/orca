@@ -2,13 +2,10 @@ import React from 'react'
 import { Loader2 } from 'lucide-react'
 import { useNow } from '@/hooks/use-now'
 import { translate } from '@/i18n/i18n'
-import type { WorkspaceCleanupScanProgress } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupScanProgress } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import { formatWorkspaceCleanupRelativeTime } from './workspace-cleanup-relative-time'
 
-/**
- * Fixed-slot freshness line: "Updated 2h ago" for the data on screen plus a
- * non-blocking "Refreshing" affordance while a background rescan streams.
- */
+/** Show the displayed snapshot’s age while a nonblocking rescan indicator streams updates. */
 export function WorkspaceCleanupFreshness({
   scannedAt,
   refreshing,

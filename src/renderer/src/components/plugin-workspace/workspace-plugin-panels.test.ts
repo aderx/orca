@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { workspacePluginPanelKeys } from './workspace-plugin-panels'
 import { normalizeRightSidebarRoute } from '@/store/right-sidebar-route'
-import { pluginPanelTabKey } from '../../../../shared/plugins/plugin-tab-key'
+import { pluginPanelTabKey } from '../../../../shared/plugins/frames/plugin-tab-key'
 
 // Minimal metadata is sufficient for routing; no worker is executed.
 const workspaceKey = pluginPanelTabKey('local.launcher', 'services')

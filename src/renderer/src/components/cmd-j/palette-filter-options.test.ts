@@ -4,7 +4,7 @@ import { getWorktreeExecutionHostId, type ExecutionHostId } from '../../../../sh
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { buildSidebarHostOptions } from '../sidebar/sidebar-host-options'
+import { buildSidebarHostOptions } from '../sidebar/worktree-list/controls/sidebar-host-options'
 import { buildPaletteFilterModel, resolveWorktreeFilterHostId } from './palette-filter-options'
 import { buildPaletteFilterPredicate } from './palette-filter'
 
@@ -222,8 +222,7 @@ describe('resolveWorktreeFilterHostId', () => {
     ).toBe('runtime:env-1')
   })
 
-  // Guards the bucketing contract: the palette must land a workspace on the same
-  // host the sidebar does, including the host-less "inherit the focused runtime" case.
+  // Keep host bucketing aligned with the sidebar, including host-less rows inheriting the focused runtime.
   it('agrees with getWorktreeExecutionHostId for every default host', () => {
     const repoMap = new Map(repos.map((entry) => [entry.id, entry]))
     const cases = [
