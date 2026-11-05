@@ -78,8 +78,10 @@ async function run(args, extraEnv = {}) {
   })
 }
 console.log(`Building ${buildVersion} from origin/dev ${sourceHead}`)
-for (const script of ['build-wsl-guest', 'build-computer-macos', 'build-keyboard-layout-macos', 'build-process-footprint-macos', 'build-notification-status-macos'])
+for (const script of ['build-wsl-guest', 'build-computer-macos'])
   await run([`config/scripts/${script}.mjs`])
+for (const script of ['build-keyboard-layout-macos', 'build-process-footprint-macos', 'build-notification-status-macos'])
+  await run([`config/scripts/${script}.mjs`, '--single-arch', ...(script === 'build-notification-status-macos' ? ['--bundle-id', 'local.orca.zstack'] : [])])
 await run(['--max-old-space-size=2048', 'node_modules/electron-vite/bin/electron-vite.js', 'build', '--config', path.join(recipe, 'renderer.config.mjs')])
 fs.rmSync(path.join(repo, 'out/renderer'), { recursive: true, force: true })
 fs.cpSync(path.join(stage, 'renderer'), path.join(repo, 'out/renderer'), { recursive: true })
