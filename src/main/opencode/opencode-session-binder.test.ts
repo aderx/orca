@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createHookListenerState } from '../../shared/agent-hook-listener/listener-state'
 import { lookupOpenCodeSessionPane } from '../../shared/agent-hook-listener/opencode-session-registry'
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import type { ProcessIdentityRow } from './opencode-client-sweep'
 import {
   advanceBinderCursor,
@@ -155,9 +155,7 @@ describe('applyBinderOwnerships', () => {
 
   it('takes the newest row worktree when a pane remints', () => {
     const state = createHookListenerState()
-    // Registry insertion order puts the stale row first; the live remint row
-    // carries a different worktree and must win, matching the round's
-    // newest-wins pane dedupe.
+    // Insert stale first so a reminted pane’s newer worktree must win.
     const applied = applyBinderOwnerships(
       state,
       [

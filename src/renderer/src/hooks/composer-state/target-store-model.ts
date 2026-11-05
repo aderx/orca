@@ -16,11 +16,12 @@ import type { ComposerDecisions } from './composer-decisions'
 import type { ComposerStoreActions } from './composer-store-actions'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
-import type { RuntimeEnvironmentStatus } from '../../store/slices/runtime-status'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
+import type { RuntimeEnvironmentStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { WorkspaceHostScope } from '../../../../shared/ui-chrome-types'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
+import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
 
 export type ComposerTargetStoreModel = {
   initialRepoId: string | undefined
@@ -30,6 +31,7 @@ export type ComposerTargetStoreModel = {
   initialLinkedWorkItem: LinkedWorkItemSummary | null
   initialGitHubWorkItem: GitHubWorkItem | null
   initialTaskSourceContext: TaskSourceContext | null
+  initialWorkspaceTarget: WorkspaceCreationTargetHint | null
   initialWorkspaceStatus: WorkspaceStatus | undefined
   initialBaseBranch: string | undefined
   persistDraft: boolean
@@ -62,7 +64,7 @@ export type ComposerTargetStoreModel = {
   newWorkspaceDraft: UISlice['newWorkspaceDraft']
   worktreesByRepo: Record<string, Worktree[]>
   sparsePresetsByRepo: Record<string, SparsePreset[]>
-  workspaceStatuses: WorkspaceStatusDefinition[]
+  workspaceStatuses: readonly WorkspaceStatusDefinition[]
   sshConnectionStates: Map<string, SshConnectionState>
   sshTargetLabels: Map<string, string>
   sshConnectedGeneration: number

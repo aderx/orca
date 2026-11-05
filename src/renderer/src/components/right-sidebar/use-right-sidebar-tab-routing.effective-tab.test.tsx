@@ -16,7 +16,7 @@ const store = vi.hoisted(() => ({
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) => selector(store.state)
 }))
-vi.mock('./use-installed-plugin-route-reconciliation', () => ({
+vi.mock('./plugin-panels/use-installed-plugin-route-reconciliation', () => ({
   useInstalledPluginRouteReconciliation: () => {}
 }))
 
@@ -25,7 +25,6 @@ afterEach(cleanup)
 it('publishes Explorer when it renders as the fallback for a hidden stored tab', () => {
   const published: (string | null)[] = []
   store.state.setRightSidebarEffectiveTab = (tab) => published.push(tab)
-  // A folder repo hides the git-only Source Control tab.
   const visibleItems: ActivityBarItem[] = (['explorer', 'vault'] as const).map((id) => ({
     id,
     icon: () => null,

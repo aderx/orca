@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AiVaultSession } from '../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { ScannedSessionCollection } from './session-root-dedup'
 import { canStopParsingSessions } from './session-scan-cutoff'
 import { createAccumulator, finalizeSession, sessionSortTime } from './session-scanner-accumulator'
@@ -104,6 +104,21 @@ describe('canStopParsingSessions', () => {
   })
 
   it('uses the same nullish modified-time fallback and numeric limit semantics', () => {
+    const modifiedOnly = session('', {
+      updatedAt: null,
+      modifiedAt: '1970-01-01T00:00:02+00:00'
+    })
+    expect(canStopParsingSessions(collection([modifiedOnly]), 1, 1000)).toBe(true)
+    expect(canStopParsingSessions(collection([{ ...modifiedOnly, updatedAt: '' }]), 1, 1000)).toBe(
+      false
+    )
+
+    const boundaries = collection([session(10), session(20)])
+    expect(canStopParsingSessions(boundaries, 0, 9)).toBe(true)
+    expect(canStopParsingSessions(boundaries, 0, 10)).toBe(false)
+    expect(canStopParsingSessions(boundaries, 0.5, 19)).toBe(true)
+    expect(canStopParsingSessions(boundaries, Number.NaN, 20)).toBe(false)
+
     const rows = [
       session('', { updatedAt: null, modifiedAt: '1970-01-01T00:00:02+00:00' }),
       session('-000001-01-01T00:00:00Z'),

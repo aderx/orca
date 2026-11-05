@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { usePluginPanelsStore } from '@/store/plugin-panels'
-import { resolvePluginPanelIcon } from '../right-sidebar/plugin-panel-activity-items'
+import { resolvePluginPanelIcon } from '../right-sidebar/plugin-panels/plugin-panel-activity-items'
 
 export function WorkspacePluginTabIcon({
   tabKey,

@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { createLazyTerminalTabLookup } from './pane-identity-migration'
 import { normalizeWorkspaceSessionPaneIdentities } from './workspace-pane-normalization'
 
@@ -127,7 +130,7 @@ describe('workspace pane normalization tab index', () => {
     expect(lookup.get('first')).toBe(first)
   })
 
-  it('resumes scanning and makes later misses constant-time', () => {
+  it('resumes scanning and reuses cached hits and misses', () => {
     const reads: string[] = []
     const tabs = ['first', 'second', 'third'].map((id) => {
       const tab = terminalTab(id, 'worktree', null)
@@ -146,9 +149,12 @@ describe('workspace pane normalization tab index', () => {
     expect(reads).toEqual(['first'])
     expect(lookup.get('second')).toBe(tabs[1])
     expect(reads).toEqual(['first', 'second'])
+    expect(lookup.get('first')).toBe(tabs[0])
+    expect(reads).toEqual(['first', 'second'])
     expect(lookup.get('missing')).toBeUndefined()
     expect(reads).toEqual(['first', 'second', 'third'])
     expect(lookup.get('missing')).toBeUndefined()
+    expect(lookup.get('first')).toBe(tabs[0])
     expect(reads).toEqual(['first', 'second', 'third'])
   })
 

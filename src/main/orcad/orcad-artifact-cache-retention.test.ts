@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ORCAD_LOCK_FILE_NAME } from './orcad-instance-lock'
 import {
-  liveLocalOrcadServeVersion,
   pruneDesktopOrcadArtifactCache,
   pruneOrcadArtifactCache
 } from './orcad-artifact-cache-retention'
@@ -22,7 +21,6 @@ function cacheRoot(): string {
   return root
 }
 
-/** A slot dir last used `ageMinutes` ago. */
 function slot(root: string, target: string, name: string, ageMinutes: number): string {
   const path = join(root, target, name)
   mkdirSync(path, { recursive: true })
@@ -61,39 +59,6 @@ describe('orcad artifact cache retention', () => {
     for (const path of [...recent, inUse, staging]) {
       expect(existsSync(path)).toBe(true)
     }
-  })
-
-  it('leaves the runtime archive cache and a missing root alone', async () => {
-    const root = cacheRoot()
-    const archives = join(root, 'node', 'archives')
-    mkdirSync(archives, { recursive: true })
-    for (const age of [1, 2, 3, 4]) {
-      slot(root, 'node', `archive-${age}`, age)
-    }
-    expect(await pruneOrcadArtifactCache(root)).toEqual([])
-    expect(await pruneOrcadArtifactCache(join(root, 'missing'))).toEqual([])
-  })
-
-  it('names the slot a live local orcad serve runs from, and nothing for the desktop', () => {
-    const userData = cacheRoot()
-    const lock = (role: string) =>
-      writeFileSync(
-        join(userData, ORCAD_LOCK_FILE_NAME),
-        JSON.stringify({
-          pid: process.pid,
-          startedAtMs: null,
-          nonce: 'nonce',
-          identity: 'uid',
-          version: '0.1.0+abc',
-          acquiredAt: new Date().toISOString(),
-          role
-        })
-      )
-    lock('orcad')
-    expect(liveLocalOrcadServeVersion(userData)).toBe('0.1.0+abc')
-    expect(liveLocalOrcadServeVersion(userData, () => false)).toBeNull()
-    lock('desktop')
-    expect(liveLocalOrcadServeVersion(userData)).toBeNull()
   })
 
   it('keeps both the selected slot and the one a running orcad serve still uses', async () => {

@@ -8,7 +8,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
 import type { ClaudeManagedAccount } from '../../../../shared/managed-account-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { ClaudeOldTerminalBanner } from './ClaudeOldTerminalBanner'
 
 const routing = vi.hoisted(() => ({ activateAndRevealWorkspace: vi.fn(() => ({})) }))
@@ -148,7 +148,7 @@ describe('ClaudeOldTerminalBanner', () => {
     expect(openNewTerminalTabInActiveWorkspace).toHaveBeenCalledWith('group-2')
   })
 
-  it('stays hidden for a terminal from this version, an SSH pane, or one after Dismiss', async () => {
+  it('stays hidden for a terminal from this version or after Dismiss', async () => {
     setState(SELECTED)
     openedBeforeClaudeAccounts.mockResolvedValue(false)
     await renderBanner()

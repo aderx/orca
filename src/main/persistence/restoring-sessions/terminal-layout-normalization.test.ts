@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'
 import {
   collectLayoutLeafIdsInOrder,
   normalizeTerminalLayoutSnapshotForPersistence
@@ -23,8 +23,7 @@ function splitOf(firstLeafId: string, secondLeafId: string): TerminalLayoutSnaps
 
 describe('normalizeTerminalLayoutSnapshotForPersistence', () => {
   it('never hands a preferred id to a leaf that another input leaf already owns', () => {
-    // The preferred id at index 0 is the stable id the *second* input leaf keeps; reusing it here
-    // would recreate the duplicate and merge both leaves' pty/buffer/scrollback/title records.
+    // Reusing the later stable leaf's ID would merge distinct panes' persisted records.
     const input: TerminalLayoutSnapshot = {
       ...splitOf('pane:1', STABLE_B),
       ptyIdsByLeafId: { 'pane:1': 'pty-1', [STABLE_B]: 'pty-2' }

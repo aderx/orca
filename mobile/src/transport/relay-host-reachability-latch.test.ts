@@ -9,7 +9,7 @@ vi.mock('./mobile-e2ee-v2-physical-channel', () => ({
   MobileE2EEV2PhysicalChannel: class {}
 }))
 
-import { MOBILE_RELAY_CLOSE_CODE } from '../../../src/shared/mobile-relay-close-codes'
+import { MOBILE_RELAY_CLOSE_CODE } from '../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 import { RelayHostReachabilityLatch } from './relay-host-reachability-latch'
 
@@ -56,6 +56,8 @@ describe('RelayHostReachabilityLatch', () => {
     const latch = new RelayHostReachabilityLatch()
     latch.record(closed(OFFLINE))
     latch.record(closed(OFFLINE))
+    latch.record(closed(1006))
+    expect(latch.current()).toBe('host-offline')
     latch.record(closed(MOBILE_RELAY_CLOSE_CODE.DRAINING))
     expect(latch.current()).toBe('host-offline')
     latch.record(closed(1006))

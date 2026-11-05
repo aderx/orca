@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { NewerDaemonReopenResult } from '../../../../shared/newer-daemon-hold'
 import { NewerDaemonHoldBanner } from './NewerDaemonHoldBanner'
 import {
@@ -136,7 +136,7 @@ describe('NewerDaemonHoldBanner', () => {
     expect(newerDaemonHoldStore.getState().panes[PANE_KEY]?.phase).toBe('held')
     expect(newerDaemonHoldStore.getState().panes[OTHER_PANE_KEY]?.dismissed).toBe(false)
     expect(release).not.toHaveBeenCalled()
-    await act(async () => reopenHeldTerminals())
+    await act(async () => reopenHeldTerminals(PANE_KEY))
     expect(release).toHaveBeenCalledTimes(1)
     expect(otherRelease).toHaveBeenCalledTimes(1)
   })

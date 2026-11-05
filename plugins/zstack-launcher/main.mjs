@@ -275,7 +275,7 @@ async function startTerminal(ctx, run, file, reuseHandle) {
       }
     }
     try {
-      terminal ??= await host.call('terminal.create', { worktreeId: ctx.worktreeId, command, title: run.service.toUpperCase() })
+      terminal ??= await host.call('terminal.createOwned', { worktreeId: ctx.worktreeId, command, title: run.service.toUpperCase() })
     } catch (error) {
       Object.assign(run, { state: 'failed', error: error.message, updatedAt: Date.now() })
       attemptSync(ctx, '保存启动失败状态', () => atomicJson(file, run))
@@ -522,9 +522,11 @@ export default function activate(orca) {
     })
     return { enabled: true, items, notices: runNotices(ctx, ['bff', 'fe'].map(service => runState(ctx, service))) }
   })
-  orca.commands.register('launcher.request', (request) => {
+  const launcherRequest = (request) => {
     const result = chain.then(() => dispatch(request))
     chain = result.catch(() => undefined)
     return result.then((value) => value.completion ?? value)
-  })
+  }
+  orca.commands.register('launcher.request', launcherRequest)
+  orca.panels.handle('launcher.request', launcherRequest)
 }

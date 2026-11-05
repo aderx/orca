@@ -2,7 +2,7 @@ import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { rmSync } from 'node:fs'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
-import { _resetPtyOwnerHostColorsForTest } from '../../shared/pty-owner-color-query-colors'
+import { _resetPtyOwnerHostColorsForTest } from '../../shared/terminal/pty/ingress/pty-owner-color-query-colors'
 import {
   createMockSubprocess,
   startDaemonAdapterHarness,
@@ -39,7 +39,7 @@ describe('daemon OSC 10/11 colours', () => {
     subprocess._simulateData(QUERY)
     await waitFor(() => subprocess.write.mock.calls.length === 1)
     harness.adapter.setColorQueryReplyColors({ foreground: '#000000', background: '#123456' })
-    // Why a second query to wait on: the push is a fire-and-forget notification.
+    // The update is fire-and-forget; wait by observing a later query's reply.
     await waitFor(() => {
       subprocess._simulateData(QUERY)
       return subprocess.write.mock.calls.some(
@@ -64,7 +64,6 @@ describe('daemon OSC 10/11 colours', () => {
         ([reply]) => reply === '\x1b]11;rgb:abab/cdcd/efef\x1b\\'
       )
     })
-    // The value is daemon-wide: a session another client spawned answers the same way.
     await harness.adapter.spawn({ cols: 80, rows: 24 })
     subprocess._simulateData(QUERY)
     await waitFor(() => subprocess.write.mock.calls.length === 1)

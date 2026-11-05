@@ -2,7 +2,11 @@
 
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DiscardAllDeps, DiscardAllResult, DiscardAllArea } from './discard-all-sequence'
+import type {
+  DiscardAllDeps,
+  DiscardAllResult,
+  DiscardAllArea
+} from '../../../../../../shared/source-control/listing/source-control-discard-all-sequence'
 import type { SourceControlToastTestOptions } from './source-control-toast-test-options'
 type DiscardAllRunner = (
   area: DiscardAllArea,
@@ -20,14 +24,17 @@ vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => undefined })
 vi.mock('@/runtime/runtime-git-working-tree-client', () => ({
   bulkUnstageRuntimeGitPaths: vi.fn()
 }))
-vi.mock('./discard-all-sequence', () => ({
-  getDiscardAllPaths: () => [],
-  runDiscardAllForArea: (area: DiscardAllArea, paths: readonly string[], deps: DiscardAllDeps) =>
-    mocks.runDiscardAllForArea(area, paths, deps)
-}))
+vi.mock(
+  '../../../../../../shared/source-control/listing/source-control-discard-all-sequence',
+  () => ({
+    getDiscardAllPaths: () => [],
+    runDiscardAllForArea: (area: DiscardAllArea, paths: readonly string[], deps: DiscardAllDeps) =>
+      mocks.runDiscardAllForArea(area, paths, deps)
+  })
+)
 
 import { useSourceControlDiscardConfirmation } from './use-discard-confirmation'
-import type { SourceControlEntryGroups } from '../listing/section-order'
+import type { SourceControlEntryGroups } from '../../../../../../shared/source-control/listing/source-control-section-order'
 
 const EMPTY_GROUPS: SourceControlEntryGroups = { unstaged: [], staged: [], untracked: [] }
 

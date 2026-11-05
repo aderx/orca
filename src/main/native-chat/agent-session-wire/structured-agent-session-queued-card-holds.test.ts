@@ -1,35 +1,21 @@
-// The queue sends its cards strictly in order. The host publishes the queue's pause and the card it
-// sends next. A client reading its updates one at a time, as the chat does, reads one working state
-// across a turn's end or a Resume and the queue's send of the next card: the working status and
-// row, the pickers, the composer button and the card labels never flip in between. After a restart
-// nothing sends by itself and no pause shows: the chat's next turn runs first, then the cards.
-// Where the host would refuse the send, it names no next card, so the chat reads idle.
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuePause
-} from '../../../shared/agent-session-wire'
-import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/structured-agent-session-main-agent-working'
+} from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/agent-session/view/structured-agent-session-main-agent-working'
 import {
   projectQueuedMessageCards,
   queuedMessageCardSteers,
   queuedMessagesQueuePause
-} from '../../../renderer/src/components/native-chat/structured-agent-session-queued-cards'
-import {
-  nativeChatComposerPrimaryAction,
-  type NativeChatComposerPrimaryAction
-} from '../../../renderer/src/components/native-chat/native-chat-composer-primary-action'
+} from '../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   readQueuePublication,
   structuredQueueSendGate
 } from './structured-agent-session-queued-publication'
-import {
-  structuredAgentSessionHostInstance,
-  structuredQueuePauses
-} from './structured-agent-session-queued-pause'
+import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import {
   HOST_TEST_SESSION,
@@ -42,6 +28,13 @@ import {
   QUEUED_RIG_CALLER,
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
+import { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
+// The queue sends its cards strictly in order. The host publishes the queue's pause and the card it
+// sends next. A client reading its updates one at a time, as the chat does, reads one working state
+// across a turn's end or a Resume and the queue's send of the next card: the working status and
+// row, the pickers, the composer's Stop and the card labels never flip in between. After a restart
+// nothing sends by itself and no pause shows: the chat's next turn runs first, then the cards.
+// Where the host would refuse the send, it names no next card, so the chat reads idle.
 
 let rig: QueuedMessageTestRig
 
@@ -105,12 +98,8 @@ type ClientView = {
   working: boolean
   /** A Stop pressed now would stop something. */
   stopLive: boolean
-  /** The empty composer's primary button. */
-  button: NativeChatComposerPrimaryAction
   /** The header row above the cards: the queue is held. */
   header: boolean
-  /** A new message first asks whether to clear the cards ("Send message?"). */
-  dialog: boolean
   /** Each card's Send-now reads Steer. */
   steers: boolean[]
   /** Why each card waits, which picks its caption: 'turn' is a plain waiting card. */
@@ -161,17 +150,10 @@ async function watchClient(): Promise<ClientView[]> {
       const cards = projectQueuedMessageCards(queued, all, { queuePaused: queuePause !== null })
       // As use-structured-agent-session-queued-messages.ts derives them.
       const header = queuedMessagesQueuePause(cards, queuePause) !== null
-      const queueHeld = header && !working
       views.push({
         working,
         stopLive: hostWorking,
-        button: nativeChatComposerPrimaryAction({
-          isWorking: working,
-          composerEmpty: true,
-          queueHeld
-        }),
         header,
-        dialog: queueHeld,
         steers: cards.map((card) => queuedMessageCardSteers(card)),
         holds: cards.map((card) => card.hold),
         cards: cards.length,
@@ -184,36 +166,53 @@ async function watchClient(): Promise<ClientView[]> {
 
 /** Every update in the run reads working, with Stop and Steer, and the gap update is among them. */
 function expectOneWorkingRun(views: readonly ClientView[]): void {
-  expect(views.filter((view) => !view.working || view.button !== 'stop')).toEqual([])
+  expect(views.filter((view) => !view.working)).toEqual([])
   expect(views.flatMap((view) => view.steers)).not.toContain(false)
   // Between a turn's end (or a Resume) and the queue's send: nothing in flight yet, still working.
   expect(views.some((view) => !view.stopLive && view.nextQueuedMessageId !== null)).toBe(true)
 }
 
 describe('a Stop holds the queue, in order', () => {
-  it('a card typed while the Stop lands waits behind the held one; Resume sends both in order, with no Resume or Send between them', async () => {
+  it('a send after the accepted Stop joins after shutdown, then its started turn releases the held draft without reading idle', async () => {
     const working = await rig.workingSend()
     const held = await queuedDraft('held by the stop')
     await rig.stop()
-    const typed = await queuedDraft('typed while the stop lands')
-    const views = await watchClient()
-    // Still winding down: the paused row shows, but neither Resume nor "Send message?" while it runs.
-    expect(views.at(-1)).toMatchObject({ working: true, header: true, dialog: false })
+    // Main queues child shutdown before the next admission, even before Stop's answer is read.
+    const typed = rig.send('typed while the stop lands', 'queue-if-active')
+    expect(await typed.result).toMatchObject({
+      ok: true,
+      value: { submission: { clientMessageId: typed.id, fence: 2 } }
+    })
+    await eventually(async () =>
+      expect((await rig.submission(typed.id))?.handedOverAt).toBeDefined()
+    )
+    expect(rig.closeSession).toHaveBeenCalledTimes(1)
     await rig.settleAccepted(working, 'stopped')
-    await eventually(() => expect(views.at(-1)).toMatchObject({ header: true, dialog: true }))
-    expect(views.at(-1)?.button).toBe('resume')
-    await expectNothingSent(held, typed)
-    expect((await published()).queuePause).toEqual({ reason: 'stopped' })
-    const resumedAt = views.length
+    const views = await watchClient()
+    expect(views.at(-1)).toMatchObject({ working: true, header: false })
+    await expectNothingSent(held)
+    expect(derivedPauses()).toEqual(['stopped'])
+    expect(await rig.handoff(typed.id)).toBeUndefined()
+    const startsAt = views.length
     expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
+    await expectNothingSent(held)
+    await rig.settleAccepted(typed.id, 'typed-started')
     await eventually(async () => expect(await rig.handoff(held)).toBeDefined())
-    expect(await rig.handoff(typed)).toBeUndefined()
-    await rig.settleAccepted(await rig.handoffId(held), 'held')
-    await eventually(async () => expect(await rig.handoff(typed)).toBeDefined())
-    expectOneWorkingRun(views.slice(resumedAt))
+    expectOneWorkingRun(views.slice(startsAt))
+    const journal = rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+    expect(journal.submissionBody(working)).toEqual(hostTestMessage('work on this'))
+    expect(journal.submissionBody(typed.id)).toEqual(hostTestMessage('typed while the stop lands'))
+    await eventually(async () =>
+      expect(rig.dispatch.mock.calls.map(([send]) => send.clientMessageId)).toEqual([
+        working,
+        typed.id,
+        await rig.handoffId(held)
+      ])
+    )
+    expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: false } })
   })
 
-  it('after Resume over held cards the chat goes from idle with Resume straight to working with Stop', async () => {
+  it('after Resume over held cards the chat goes from idle and paused straight to working with Stop', async () => {
     const working = await rig.workingSend()
     const first = await queuedDraft('first')
     await queuedDraft('second')
@@ -221,7 +220,7 @@ describe('a Stop holds the queue, in order', () => {
     await rig.settleAccepted(working, 'stopped')
     const views = await watchClient()
     const before = views.length
-    expect(views.at(-1)).toMatchObject({ working: false, button: 'resume' })
+    expect(views.at(-1)).toMatchObject({ working: false, header: true })
     expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
     await eventually(async () => expect(await rig.handoff(first)).toBeDefined())
     await eventually(() => expect(views.at(-1)?.stopLive).toBe(true))
@@ -231,14 +230,14 @@ describe('a Stop holds the queue, in order', () => {
 
 describe('after a restart, nothing sends by itself', () => {
   /** A turn runs with cards A and B waiting, and Orca quits: a quit writes no Stop event. */
-  async function restartedWithCards(): Promise<{ first: string; second: string }> {
-    await rig.workingSend()
+  async function restartedWithCards(): Promise<{ first: string; second: string; working: string }> {
+    const working = await rig.workingSend()
     const first = await queuedDraft('A')
     const second = await queuedDraft('B')
     rig.crashRestartHostProcess()
     // The new host opens the chat for its first reader.
     await published()
-    return { first, second }
+    return { first, second, working }
   }
 
   /** The same, through a restart whose old agent this rig can still settle, so the next turn can
@@ -263,12 +262,10 @@ describe('after a restart, nothing sends by itself', () => {
     await rig.host.close(HOST_TEST_SESSION, 'evict')
     expect(await published()).toEqual({ queuePause: null, nextQueuedMessageId: null })
     await expectNothingSent(first, second)
-    // The chat reads idle with plain cards: no paused row, no Resume, no "Send message?".
+    // The uncertain original stays in history; ordinary waiting cards keep their own policy.
     expect(views.at(-1)).toMatchObject({
       working: false,
       header: false,
-      dialog: false,
-      button: 'send',
       cards: 2,
       holds: ['turn', 'turn'],
       steers: [true, true]
@@ -298,7 +295,7 @@ describe('after a restart, nothing sends by itself', () => {
     expect(await rig.handoff(second)).toBeUndefined()
     await rig.settleAccepted(await rig.handoffId(first), 'A')
     await eventually(async () => expect(await rig.handoff(second)).toBeDefined())
-    expect(views.filter((view) => view.header || view.dialog)).toEqual([])
+    expect(views.filter((view) => view.header)).toEqual([])
     expectOneWorkingRun(views.slice(views.findIndex((view) => view.working)))
   })
 
@@ -320,7 +317,7 @@ describe('after a restart, nothing sends by itself', () => {
     expect(await rig.handoff(second)).toBeUndefined()
     await rig.settleAccepted(await rig.handoffId(first), 'A')
     await eventually(async () => expect(await rig.handoff(second)).toBeDefined())
-    expect(views.filter((view) => view.header || view.dialog)).toEqual([])
+    expect(views.filter((view) => view.header)).toEqual([])
   })
 
   it('Steer on a card sends it now, and the rest follow it in order', async () => {
@@ -346,7 +343,7 @@ describe('after a restart, nothing sends by itself', () => {
     expect(await published()).toEqual({ queuePause: null, nextQueuedMessageId: null })
     expect(derivedPauses()).toEqual(['stopped', 'restarted'])
     const views = await watchClient()
-    expect(views.at(-1)).toMatchObject({ header: false, dialog: false, button: 'send' })
+    expect(views.at(-1)).toMatchObject({ working: false, header: false })
     const carryOn = rig.send('continue where you left off')
     await carryOn.result
     await expectNothingSent(first, second)
@@ -355,7 +352,7 @@ describe('after a restart, nothing sends by itself', () => {
     expect(await rig.handoff(second)).toBeUndefined()
     await rig.settleAccepted(await rig.handoffId(first), 'A')
     await eventually(async () => expect(await rig.handoff(second)).toBeDefined())
-    expect(views.filter((view) => view.header || view.dialog)).toEqual([])
+    expect(views.filter((view) => view.header)).toEqual([])
   })
 
   it('a card written after the restart waits while any card from before it waits; then it is an ordinary queue', async () => {
@@ -431,7 +428,7 @@ describe('after a restart, nothing sends by itself', () => {
   })
 })
 
-describe("a message sent over a held queue (the confirmation's Send message)", () => {
+describe('a message sent over a held queue', () => {
   /** Two cards a Stop holds, the stopped turn over: the paused row and Resume show. */
   async function heldIdleQueue() {
     const working = await rig.workingSend()
@@ -440,7 +437,7 @@ describe("a message sent over a held queue (the confirmation's Send message)", (
     await rig.stop()
     await rig.settleAccepted(working, 'stopped')
     const views = await watchClient()
-    expect(views.at(-1)).toMatchObject({ header: true, button: 'resume', dialog: true, cards: 2 })
+    expect(views.at(-1)).toMatchObject({ working: false, header: true, cards: 2 })
     return { first, second, views }
   }
 
@@ -482,7 +479,7 @@ describe("a message sent over a held queue (the confirmation's Send message)", (
     expect((await published()).queuePause).toBeNull()
     await rig.settleAccepted(await rig.handoffId(second), 'second')
     await eventually(async () => expect(await rig.handoff(first)).toBeDefined())
-    expect(views.slice(pressedAt).filter((view) => view.header || view.dialog)).toEqual([])
+    expect(views.slice(pressedAt).filter((view) => view.header)).toEqual([])
   })
 
   it('a Steer the agent refuses lifts nothing: the paused row comes back over the card before it', async () => {
@@ -555,31 +552,48 @@ describe('where the host would refuse the send', () => {
     if (!journal) {
       throw new Error('expected the conversation open')
     }
+    // The clear's generation end wakes the drain, which would send the card; holding the session's
+    // lane keeps it waiting while the test reads the gate (`release` lets the drain run).
+    // The gate exists before the task runs: other work may be queued ahead of it on the lane.
+    let release = (): void => undefined
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    const held = rig.host.collaboratorsForTests().serialize(HOST_TEST_SESSION, () => gate)
     const card = 'left-behind'
     await journal.queuedMessages.insert({
       messageId: card,
-      body: hostTestMessage('queued after clear'),
-      fingerprint: 'fp-left-behind',
-      hostInstance: structuredAgentSessionHostInstance()
+      body: hostTestMessage('queued after clear')
     })
     const record = rig.store.getRecord(HOST_TEST_SESSION)
     if (!record) {
       throw new Error('expected the record')
     }
-    return { card, journal, record, fence: record.lease.runtimeFence }
+    const done = async (): Promise<void> => {
+      release()
+      await held
+    }
+    return { card, journal, record, fence: record.lease.runtimeFence, done }
   }
 
   it('a card queued after clear is sendable with the completed clear record still present', async () => {
-    const { card, journal, record, fence } = await cardAddedAfterClear()
-    const gate = structuredQueueSendGate(rig.store, HOST_TEST_SESSION)
+    const { card, journal, record, fence, done } = await cardAddedAfterClear()
+    const gate = structuredQueueSendGate(
+      { store: rig.store, sessions: rig.host.collaboratorsForTests().sessions },
+      HOST_TEST_SESSION
+    )
     expect(readQueuePublication(journal, gate).nextQueuedMessageId).toBe(card)
     const { conversationCommand: _cleared, ...unblocked } = record
-    const next = readQueuePublication(journal, () => ({ record: unblocked, fence }))
+    const next = readQueuePublication(journal, () => ({
+      record: unblocked,
+      work: new StructuredAgentSessionCurrentWork(journal, fence)
+    }))
     expect(next.nextQueuedMessageId).toBe(card)
+    await done()
+    // Released, the drain the clear's end woke sends it.
+    await vi.waitFor(() => expect(journal.queuedMessages.get(card)?.state).toBe('dispatched'))
   })
 
   it('a rewind whose outcome is unknown names no next card', async () => {
-    const { journal, record, fence } = await cardAddedAfterClear()
+    const { journal, record, fence, done } = await cardAddedAfterClear()
     const { conversationCommand: _cleared, ...unblocked } = record
     const rewind = {
       operationId: hostTestOperationId(),
@@ -590,9 +604,13 @@ describe('where the host would refuse the send', () => {
       retained: []
     }
     const next = (gateRecord: typeof record) =>
-      readQueuePublication(journal, () => ({ record: gateRecord, fence })).nextQueuedMessageId
+      readQueuePublication(journal, () => ({
+        record: gateRecord,
+        work: new StructuredAgentSessionCurrentWork(journal, fence)
+      })).nextQueuedMessageId
     expect(next({ ...unblocked, rewind })).toBeNull()
     expect(next({ ...unblocked, rewind: { ...rewind, phase: 'provider-succeeded' } })).toBeNull()
     expect(next({ ...unblocked, rewind: { ...rewind, phase: 'completed' } })).not.toBeNull()
+    await done()
   })
 })

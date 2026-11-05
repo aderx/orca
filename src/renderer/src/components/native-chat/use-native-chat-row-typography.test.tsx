@@ -2,7 +2,7 @@
 import { useMemo, useRef } from 'react'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import * as terminalThemeSelection from '../../../../shared/terminal-theme-selection'
+import * as terminalThemeSelection from '../../../../shared/terminal-themes/terminal-theme-selection'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { useAppStore } from '../../store'
 import { resetSystemPrefersDarkSubscriptionForTests } from '../terminal-pane/use-system-prefers-dark'
@@ -18,6 +18,19 @@ afterEach(() => {
 })
 
 describe('memoized transcript row typography', () => {
+  it('keeps row estimates stable across custom and inherited font changes', () => {
+    const settings = createGlobalSettingsFixture({ appFontFamily: 'Geist' })
+    useAppStore.setState({ settings })
+    const { result } = renderHook(() => useNativeChatRowTypography(useRef<HTMLDivElement>(null)))
+    const inherited = result.current.typography
+    const custom = { ...settings, nativeChatAppearance: { fontFamily: 'Georgia' } }
+    act(() => useAppStore.setState({ settings: custom }))
+    expect(result.current.typography).toBe(inherited)
+    act(() => useAppStore.setState({ settings: { ...custom, appFontFamily: 'Arial' } }))
+    expect(result.current.typography).toBe(inherited)
+    act(() => useAppStore.setState({ settings: { ...settings, appFontFamily: 'Arial' } }))
+    expect(result.current.typography).toBe(inherited)
+  })
   it('does no theme work on message renders or unrelated settings writes and follows text size and measured width', () => {
     const settings = createGlobalSettingsFixture({
       theme: 'dark',

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { composeWorktreeHostIdentity } from '../../../../../shared/worktree/host-qualified-identity'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../../shared/terminal-tab-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { WorktreeDeleteState } from '@/store/slices/worktree-delete-state-types'
 import { shouldRetainDisposedPaneSpawn } from './disposed-spawn-retention'
 
@@ -79,6 +82,17 @@ describe('shouldRetainDisposedPaneSpawn', () => {
     ).toBe(false)
     expect(
       shouldRetainDisposedPaneSpawn(state({ deleting: { other: deleting } }), WT, TAB, LEAF)
+    ).toBe(true)
+  })
+
+  it('keeps the PTY while its worktree is only queued behind other deletes', () => {
+    expect(
+      shouldRetainDisposedPaneSpawn(
+        state({ deleting: { [WT]: { ...deleting, phase: 'queued' } } }),
+        WT,
+        TAB,
+        LEAF
+      )
     ).toBe(true)
   })
 

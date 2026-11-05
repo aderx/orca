@@ -2,16 +2,17 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../src/shared/agent-session-journal-types'
-import { agentSessionPromptAttentionKey } from '../../src/shared/agent-session-attention'
-import { projectStructuredAgentSessionStatusState } from '../../src/shared/structured-agent-session-projection'
-import { AGENT_SESSION_ATTENTION_ACK_RUNTIME_CAPABILITY } from '../../src/shared/protocol-version'
+import type { AgentJournalRenderItem } from '../../src/shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionPromptAttentionKey } from '../../src/shared/agent-session/agent-session-attention'
+import { projectStructuredAgentSessionStatusState } from '../../src/shared/agent-session/view/structured-agent-session-projection'
+import { AGENT_SESSION_ATTENTION_ACK_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-attention-capabilities'
+import { getStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
 import { StructuredAgentSessionTurnCompletionFeed } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-turn-completion-feed'
 import {
   RuntimeMobileNotificationController,
   type MobileNotificationEvent
 } from '../../src/main/runtime/runtime-mobile-notification-controller'
-import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/structured-agent-session-mobile-attention'
+import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/agent-session/structured-agent-session-mobile-attention'
 import {
   createHarness,
   flush,
@@ -53,9 +54,15 @@ function prompt(id: string, sequence: number): AgentJournalRenderItem {
     }
   }
 }
-function attentionPath(directory: string) {
+const controllers: RuntimeMobileNotificationController[] = []
+function storeController(directory: string): RuntimeMobileNotificationController {
   const controller = new RuntimeMobileNotificationController()
   controller.configureDismissalStore(directory)
+  controllers.push(controller)
+  return controller
+}
+function attentionPath(directory: string) {
+  const controller = storeController(directory)
   const events: MobileNotificationEvent[] = []
   controller.onDispatched((event) => events.push(event))
   let items: AgentJournalRenderItem[] = [
@@ -79,14 +86,18 @@ function attentionPath(directory: string) {
     readNotificationSettings: () => ({
       enabled: true,
       agentTaskComplete: true,
+      agentNeedsInput: true,
       terminalBell: true,
       suppressWhenFocused: false,
       customSoundId: 'system',
       customSoundPath: null,
       customSoundVolume: 1,
-      mutedNotificationSourceIds: []
+      mutedNotificationSourceIds: [],
+      notifyHiddenWorkspaces: false
     }),
     readWorkspaceLabels: () => ({}),
+    isWorkspaceMuted: () => false,
+    readOrchestration: () => undefined,
     dispatch: (event) => controller.dispatch(event),
     reconcile: (state) => controller.reconcileStructuredPromptAttention(state),
     now: () => 42
@@ -102,6 +113,7 @@ function attentionPath(directory: string) {
       ]
     ]),
     readStatusState: () => projectStructuredAgentSessionStatusState(items),
+    readChildWork: () => undefined,
     now: () => 42
   })
   feed.subscribe({
@@ -129,10 +141,16 @@ let directory: string
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'orca-bounded-read-'))
   installStructuredHostStub()
+  const host = getStructuredAgentSessionHost()
+  if (!host) {
+    throw new Error('structured host not installed')
+  }
+  vi.spyOn(host.attentionReads, 'sessionLocation').mockReturnValue(SCOPE)
   vi.clearAllMocks()
 })
-afterEach(() => {
+afterEach(async () => {
   clearStructuredHostStub()
+  await Promise.all(controllers.splice(0).map((controller) => controller.closeDismissals()))
   rmSync(directory, { recursive: true, force: true })
 })
 
@@ -148,7 +166,7 @@ it('a delayed production renderer read retires A while leaving unseen B live', a
   )
   transport.call.mockImplementation(async (_target, method: string, params: unknown) => {
     const reply = await call(method, params, STRUCTURED_CLIENT, {
-      retireStructuredAttention: h.controller.retireStructuredAttention.bind(h.controller)
+      acknowledgeNotificationAttention: h.controller.acknowledgeAttention.bind(h.controller)
     })
     if (!reply.ok) {
       throw new Error(reply.error.message)
@@ -197,12 +215,15 @@ it('keeps missing-origin and other-journal deliveries outside a bounded read', (
     body: '',
     notificationId: agentSessionPromptAttentionKey(SCOPE, SESSION, 'old')
   })
-  h.controller.retireStructuredAttention({
-    sessionId: SESSION,
-    observedCursor: { ...read, epoch: 'later-journal' }
+  h.controller.acknowledgeAttention({
+    reads: [
+      { scope: SCOPE, sessionId: SESSION, observedCursor: { ...read, epoch: 'later-journal' } }
+    ]
   })
   expect(h.events.filter((event) => event.type === 'dismiss')).toEqual([])
-  h.controller.retireStructuredAttention({ sessionId: SESSION, observedCursor: read })
+  h.controller.acknowledgeAttention({
+    reads: [{ scope: SCOPE, sessionId: SESSION, observedCursor: read }]
+  })
   expect(h.events.filter((event) => event.type === 'dismiss')).toHaveLength(1)
 })
 
@@ -213,8 +234,8 @@ it('a restart sends the original delivery fence in the existing native gateway f
   if (!original) {
     throw new Error('prompt not delivered')
   }
-  const restarted = new RuntimeMobileNotificationController()
-  restarted.configureDismissalStore(directory)
+  await h.controller.closeDismissals()
+  const restarted = storeController(directory)
   const gateway = createHarness({
     devices: [{ deviceId: 'phone', pushRegistration: registration() }]
   })
@@ -223,7 +244,9 @@ it('a restart sends the original delivery fence in the existing native gateway f
     retirement.push(event)
     gateway.dispatcher.enqueue(event)
   })
-  restarted.retireStructuredAttention({ sessionId: SESSION, observedCursor: cursor })
+  restarted.acknowledgeAttention({
+    reads: [{ scope: SCOPE, sessionId: SESSION, observedCursor: cursor }]
+  })
   await flush()
   expect(retirement).toEqual([
     expect.objectContaining({

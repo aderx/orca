@@ -15,9 +15,6 @@
       "kind": "storage"
     },
     {
-      "kind": "commands:invoke"
-    },
-    {
       "kind": "terminal:manage"
     },
     {

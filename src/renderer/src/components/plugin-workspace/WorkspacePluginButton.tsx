@@ -6,7 +6,7 @@ import { usePluginPanelsStore } from '@/store/plugin-panels'
 import { Button } from '@/components/ui/button'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { resolvePluginPanelIcon } from '../right-sidebar/plugin-panel-activity-items'
+import { resolvePluginPanelIcon } from '../right-sidebar/plugin-panels/plugin-panel-activity-items'
 import {
   openInitialPluginWorkspacePanel,
   resolveWorkspacePluginPanel

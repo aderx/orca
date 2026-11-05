@@ -1,6 +1,6 @@
 import React from 'react'
 import { useAppStore } from '@/store'
-import PluginPanel from '../right-sidebar/PluginPanel'
+import PluginPanel from '../right-sidebar/plugin-panels/PluginPanel'
 import { pluginWorkspaceContext } from './plugin-workspace-context'
 
 export function PluginWorkspacePanel({

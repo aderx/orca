@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
+import type { TerminalQuickCommand } from '../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
 import type { RpcClient } from '../transport/rpc-client'
 import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import type { RpcResponse } from '../transport/types'
@@ -98,7 +98,6 @@ describe('useQuickCommands', () => {
 
     await mount(client)
 
-    // Initial attempt + 5 replays, then give up rather than loop forever.
     expect(client.sendRequest).toHaveBeenCalledTimes(6)
     expect(state?.ready).toBe(false)
     expect(state?.error).toBe('RPC interrupted by connection migration')
@@ -279,7 +278,6 @@ describe('useQuickCommands', () => {
       sendRequest: vi
         .fn()
         .mockResolvedValueOnce(success([FIRST]))
-        // The host applies the targeted upsert to a list that desktop changed.
         .mockResolvedValueOnce(success([edited, SECOND]))
     } as unknown as RpcClient
     await mount(client)

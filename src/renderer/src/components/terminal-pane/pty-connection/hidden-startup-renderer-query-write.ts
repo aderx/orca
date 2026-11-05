@@ -1,11 +1,12 @@
-import { parseTerminalOscColorQuery } from '../../../../../shared/terminal-osc-color-reply'
+import { parseTerminalOscColorQuery } from '../../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import {
   HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS,
   extractHiddenStartupRendererQueryData,
   findCsiFinalByteIndex,
+  isPrimaryDeviceAttributesQuerySequence,
   isStatefulRendererReplyCsiQuery,
   isStatelessRendererReplyCsiQuery
-} from '../../../../../shared/terminal-reply-query-extraction'
+} from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-extraction'
 import type { PtyDataMeta } from '../pty-dispatcher'
 import {
   DEFAULT_DA1_RESPONSE,
@@ -132,7 +133,7 @@ export function bindHiddenStartupRendererQueryWrite(session: ConnectPanePtySessi
         const row = Math.min(buffer.cursorY + 1, session.pane.terminal.rows)
         const col = Math.min(buffer.cursorX + 1, session.pane.terminal.cols)
         session.sendDesktopQueryReplyImmediate(`\x1b[${row};${col}R`)
-      } else if (sequence === '\x1b[c' || sequence === '\x1b[0c') {
+      } else if (isPrimaryDeviceAttributesQuerySequence(sequence)) {
         session.sendDesktopQueryReplyImmediate(DEFAULT_DA1_RESPONSE)
       } else {
         unansweredQueryData += sequence

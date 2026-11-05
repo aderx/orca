@@ -45,7 +45,7 @@ test('terminal, stale PID, cache, history and env persistence failures still sub
   fs.writeFileSync(path.join(bff, '.env'), 'HOST=192.0.2.1\nBASE_PORT=3100\nINSTANCE_ID=2\nZS_MN_SERVER=http://192.0.2.2:8080\nAPI_INSPECTOR=true\nINTERACTIVE_COLLECT=false\nOPEN_PLATFORM=true\n')
   const handlers = new Map(), storage = new Map(), calls = []
   let mode = 'ok', createFailure = false, cacheFailure = false, handle = 'terminal-0'
-  activate({ commands: { register: (id, fn) => handlers.set(id, fn) }, host: { call: async (method, args) => {
+  activate({ panels: { handle() {} }, commands: { register: (id, fn) => handlers.set(id, fn) }, host: { call: async (method, args) => {
     calls.push(method)
     if (method === 'storage.get') return { value: storage.get(args.key) }
     if (method === 'storage.set') {
@@ -61,7 +61,7 @@ test('terminal, stale PID, cache, history and env persistence failures still sub
       if (mode === 'send-error') throw new Error('terminal is unavailable')
       return { accepted: mode !== 'rejected' }
     }
-    if (method === 'terminal.create') {
+    if (method === 'terminal.createOwned') {
       if (createFailure) throw new Error('new terminal unavailable')
       handle = `terminal-${calls.length}`
       return { handle }
@@ -93,10 +93,10 @@ test('terminal, stale PID, cache, history and env persistence failures still sub
   for (const failure of ['ownership', 'send-error', 'rejected', 'missing']) {
     await finish()
     mode = failure
-    const count = calls.filter(value => value === 'terminal.create').length
+    const count = calls.filter(value => value === 'terminal.createOwned').length
     const response = await request({ action: 'start', ...options })
     assert.match(JSON.stringify(response.notices), /改用新终端/)
-    assert.equal(calls.filter(value => value === 'terminal.create').length, count + 1)
+    assert.equal(calls.filter(value => value === 'terminal.createOwned').length, count + 1)
     const before = (await request({ action: 'status' })).bff
     assert.equal(before.state, 'starting')
     await request({ action: 'createTerminal', kind: 'bff', id: response.id })
@@ -104,13 +104,13 @@ test('terminal, stale PID, cache, history and env persistence failures still sub
     assert.equal(after.id, before.id)
     assert.equal(after.handle, handle)
     await request({ action: 'createTerminal', kind: 'bff', id: response.id })
-    assert.equal(calls.filter(value => value === 'terminal.create').length, count + 1)
+    assert.equal(calls.filter(value => value === 'terminal.createOwned').length, count + 1)
   }
   await finish()
   mode = 'ok'
-  const creates = calls.filter(value => value === 'terminal.create').length
+  const creates = calls.filter(value => value === 'terminal.createOwned').length
   assert.equal((await request({ action: 'start', ...options })).needsTerminal, undefined)
-  assert.equal(calls.filter(value => value === 'terminal.create').length, creates)
+  assert.equal(calls.filter(value => value === 'terminal.createOwned').length, creates)
   await finish()
   mode = 'ownership'
   createFailure = true

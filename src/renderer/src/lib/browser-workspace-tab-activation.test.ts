@@ -4,7 +4,7 @@ import { afterEach, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import type { Tab } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { getActivatableBrowserWorkspaceTab } from './browser-workspace-tab-activation'
 
@@ -114,6 +114,20 @@ it('accepts a hostless browser tab when the worktree ID is unambiguous', () => {
       executionHostId: 'ssh:remote'
     })
   ).toEqual(browserTab)
+
+  useAppStore.setState({
+    unifiedTabsByWorktree: {
+      wt: [browserTab],
+      other: [{ ...browserTab, worktreeId: 'other', contentType: 'terminal', entityId: 'terminal' }]
+    }
+  })
+  expect(
+    getActivatableBrowserWorkspaceTab({
+      worktreeId: 'wt',
+      workspaceId: 'workspace',
+      executionHostId: 'ssh:remote'
+    })
+  ).toBeNull()
 })
 
 it('includes folder workspaces when rejecting ambiguous hostless activation', () => {

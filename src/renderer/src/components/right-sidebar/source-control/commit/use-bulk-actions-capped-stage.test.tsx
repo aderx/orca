@@ -2,7 +2,7 @@
 
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 
 const mocks = vi.hoisted(() => ({ bulkStage: vi.fn(), stageScope: vi.fn(), toastError: vi.fn() }))
 
@@ -15,7 +15,7 @@ vi.mock('@/runtime/runtime-git-working-tree-client', () => ({
 }))
 
 import { useSourceControlBulkActions } from './use-bulk-actions'
-import type { SourceControlEntryGroups } from '../listing/section-order'
+import type { SourceControlEntryGroups } from '../../../../../../shared/source-control/listing/source-control-section-order'
 
 function entry(path: string, area: GitStatusEntry['area']): GitStatusEntry {
   return { path, status: area === 'untracked' ? 'untracked' : 'modified', area }
@@ -74,12 +74,12 @@ describe('Stage All on a capped status listing', () => {
     expect(mocks.bulkStage).not.toHaveBeenCalled()
   })
 
-  it('stages tracked changes on the host for the capped Changes section only', async () => {
+  it('stages tracked and untracked changes on the host for the capped Changes section only', async () => {
     const { result } = renderBulkActions(GROUPED, true)
     await act(() => result.current.handleStageSectionPaths('unstaged', ['a.ts']))
     await act(() => result.current.handleStageSectionPaths('conflicts', ['c.ts']))
 
-    expect(mocks.stageScope).toHaveBeenCalledWith(expect.anything(), 'tracked')
+    expect(mocks.stageScope).toHaveBeenCalledWith(expect.anything(), 'all')
     expect(mocks.bulkStage).toHaveBeenCalledWith(expect.anything(), ['c.ts'])
   })
 

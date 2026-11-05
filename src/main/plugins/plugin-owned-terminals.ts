@@ -1,52 +1,76 @@
-import type { PluginRuntimeDelegate } from './plugin-host-service-bindings'
+import { z } from 'zod'
+import type { PluginHostMethodContext } from './workers/plugin-host-method-bind'
+
+const created = z.object({ terminal: z.object({ handle: z.string() }) })
+const closed = z.object({
+  close: z.object({
+    ptyStopVerdict: z.enum(['live', 'unverifiable', 'exited']).optional(),
+    ptyStopReason: z.string().optional()
+  })
+})
+
+export function pluginWorkspaceEffect(
+  ctx: PluginHostMethodContext,
+  method: string,
+  params: unknown
+): Promise<unknown> {
+  if (!ctx.services.runtimeRpc) throw new Error('Runtime unavailable')
+  ctx.scope.assertActive()
+  return ctx.services.runtimeRpc(method, params, {
+    signal: ctx.scope.signal,
+    beforeEffect: () => ctx.scope.assertActive()
+  })
+}
+
+export async function assertPluginActiveWorkspace(
+  ctx: PluginHostMethodContext,
+  worktreeId: string
+): Promise<void> {
+  const context = await ctx.services.resolveActiveWorktreeContext()
+  if (!context || context.worktreeId !== worktreeId) {
+    throw new Error('The worktree changed; return to its service tab and retry')
+  }
+}
 
 /** Ownership lives with the host, never in a panel-supplied terminal handle. */
 export class PluginOwnedTerminals {
   private readonly owners = new Map<string, string>()
 
   async create(
-    delegate: PluginRuntimeDelegate,
-    pluginKey: string,
+    ctx: PluginHostMethodContext,
     input: { worktreeId: string; command: string; title: string }
   ): Promise<{ handle: string }> {
-    if (!delegate.createTerminal) throw new Error('This host cannot create plugin terminals')
-    const context = await delegate.resolveActiveWorktreeContext()
-    if (!context || context.worktreeId !== input.worktreeId) {
-      throw new Error('The worktree changed before launch; return to its service tab and retry')
-    }
-    const result = await delegate.createTerminal(`id:${input.worktreeId}`, {
+    await assertPluginActiveWorkspace(ctx, input.worktreeId)
+    const answer = await pluginWorkspaceEffect(ctx, 'terminal.create', {
+      worktree: `id:${input.worktreeId}`,
       command: input.command,
       title: input.title,
       focus: true,
+      presentation: 'focused',
       rendererBacked: true
     })
-    this.owners.set(result.handle, pluginKey)
-    return { handle: result.handle }
+    const { handle } = created.parse(answer).terminal
+    this.owners.set(handle, ctx.pluginId)
+    return { handle }
   }
 
-  async focus(
-    delegate: PluginRuntimeDelegate,
-    pluginKey: string,
-    terminalId: string
-  ): Promise<{ ok: true }> {
-    if (this.owners.get(terminalId) !== pluginKey) {
-      throw new Error('Terminal ownership is unavailable; open the original terminal tab')
+  private assertOwner(ctx: PluginHostMethodContext, terminalId: string): void {
+    if (this.owners.get(terminalId) !== ctx.pluginId) {
+      throw new Error('Terminal ownership is unavailable; use the original terminal tab')
     }
-    if (!delegate.focusTerminal) throw new Error('This host cannot focus plugin terminals')
-    await delegate.focusTerminal(terminalId)
+  }
+
+  async focus(ctx: PluginHostMethodContext, terminalId: string): Promise<{ ok: true }> {
+    this.assertOwner(ctx, terminalId)
+    await pluginWorkspaceEffect(ctx, 'terminal.focus', { terminal: terminalId })
     return { ok: true }
   }
 
-  async close(
-    delegate: PluginRuntimeDelegate,
-    pluginKey: string,
-    terminalId: string
-  ): Promise<{ ok: true }> {
-    if (this.owners.get(terminalId) !== pluginKey) {
-      throw new Error('Terminal ownership is unavailable; close the original terminal tab')
-    }
-    if (!delegate.closeTerminal) throw new Error('This host cannot close plugin terminals')
-    const result = await delegate.closeTerminal(terminalId)
+  async close(ctx: PluginHostMethodContext, terminalId: string): Promise<{ ok: true }> {
+    this.assertOwner(ctx, terminalId)
+    const result = closed.parse(
+      await pluginWorkspaceEffect(ctx, 'terminal.close', { terminal: terminalId })
+    ).close
     if (result.ptyStopVerdict === 'live' || result.ptyStopVerdict === 'unverifiable') {
       throw new Error(
         `Terminal stop is ${result.ptyStopVerdict}; ${result.ptyStopReason ?? 'retry on its execution host'}`

@@ -6,12 +6,12 @@ import {
   listWorktreesSharedStrict
 } from './orca-runtime-test-mocks.spec'
 import { store, TEST_WORKTREE_ID } from './orca-runtime-test-fixtures.spec'
-import { parseWorkspaceReferenceUrl } from '../../shared/workspace-reference-identity'
+import { parseWorkspaceReferenceUrl } from '../../shared/workspace-attachments/workspace-reference-identity'
 
-vi.mock('./agent-session-record-store-slot', () => ({
+vi.mock('./agent-session/records/agent-session-record-store-slot', () => ({
   peekOpenedAgentSessionRecordStore: () => null,
   openAgentSessionRecordStoreOnce: async () => ({
-    store: { listRecords: () => [], getRecord: () => null }
+    store: { listConversations: () => [], getConversation: () => null }
   })
 }))
 

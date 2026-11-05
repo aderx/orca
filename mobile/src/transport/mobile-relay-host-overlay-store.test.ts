@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { MobileRelayEndpointSchema } from '../../../src/shared/mobile-relay-credential-contract'
+import { MobileRelayEndpointSchema } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 
 const asyncStorage = vi.hoisted(() => ({
   getItem: vi.fn(),
@@ -48,8 +48,7 @@ const LEGACY_OVERLAY: MobileRelayHostOverlay = {
   ]
 }
 
-// Frozen copy of the overlay schema shipped builds parse with (relay endpoint schema is shared);
-// they drop a record it rejects.
+// Freeze the shipped overlay schema to prove older builds still accept written records.
 const ShippedOverlaySchema = z
   .object({
     v: z.literal(2),

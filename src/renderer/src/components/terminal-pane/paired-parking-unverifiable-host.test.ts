@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeHostStatusSnapshot } from '../../../../shared/runtime-host-status'
-import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
+import '../../../../shared/protocol-version'
+import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
 import {
   resetPairedRuntimeParkingEnvironmentIdsCacheForTest,
@@ -53,8 +54,7 @@ describe('paired parking capability through an unverifiable probe', () => {
     ).toEqual(new Set([ENVIRONMENT_ID]))
   })
 
-  // The other half of the gate: it must fire on the host's own terminal verdict and on nothing
-  // else. Firing on a flap strands every hidden tab mounted, which is the churn this PR removes.
+  // Only a terminal host verdict revokes parking; a transient probe failure must not unpark every hidden tab.
   it.each([
     ['checking', { verification: 'checking' } as const, 'checking'],
     ['reconnecting', { transport: 'disconnected' } as const, 'reconnecting'],
@@ -75,9 +75,7 @@ describe('paired parking capability through an unverifiable probe', () => {
     ).toEqual(new Set())
   })
 
-  // Parking unmounts the pane and discards the client's only copy of the scrollback, trading it
-  // for a host-side restore. A refused host retries nothing ever again, so that restore cannot
-  // happen — keeping it "capable" spends the scrollback on a promise no one can keep.
+  // A revoked host cannot authorize parking with a restore promise it can no longer fulfill, even when local captures survive.
   it.each(['blocked', 'retired'] as const)(
     'drops a %s host that can no longer honour a restore',
     (kind) => {

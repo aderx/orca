@@ -114,7 +114,7 @@ test('worker defaults to the actual .env host and installs selected FE scope in 
   const closed = [], terminals = new Set(), sent = []
   let releaseBff
   const bffTerminal = new Promise((resolve) => { releaseBff = resolve })
-  activate({
+  activate({ panels: { handle() {} },
     commands: {
       register(id, fn) {
         handlers.set(id, fn)
@@ -127,7 +127,7 @@ test('worker defaults to the actual .env host and installs selected FE scope in 
           saved = args.value
           return { ok: true }
         }
-        if (method === 'terminal.create') {
+        if (method === 'terminal.createOwned') {
           launched = args
           const handle = `fixture-terminal-${terminals.size}`
           terminals.add(handle)
