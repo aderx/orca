@@ -22,7 +22,7 @@ fs.mkdirSync(stage, { recursive: true })
 const info = {
   sourceRemote: git('remote', 'get-url', 'origin'), sourceRef: 'origin/dev', sourceHead, buildVersion,
   architecture: process.arch, startedAt: new Date().toISOString(),
-  reuse: 'Prepared CLI/native resources with unchanged owning sources; main/preload/renderer compiled from fetched dev'
+  reuse: 'Prepared CLI with unchanged owning sources; native helpers, relay, main/preload/renderer and web resources compiled from fetched dev'
 }
 fs.writeFileSync(path.join(output, 'BUILD-INFO.json'), JSON.stringify(info, null, 2))
 fs.writeFileSync(path.join(output, 'build-root.pid'), String(process.pid))
@@ -78,7 +78,13 @@ async function run(args, extraEnv = {}) {
   })
 }
 console.log(`Building ${buildVersion} from origin/dev ${sourceHead}`)
+for (const script of ['build-wsl-guest', 'build-computer-macos', 'build-keyboard-layout-macos', 'build-process-footprint-macos', 'build-notification-status-macos'])
+  await run([`config/scripts/${script}.mjs`])
 await run(['--max-old-space-size=2048', 'node_modules/electron-vite/bin/electron-vite.js', 'build', '--config', path.join(recipe, 'renderer.config.mjs')])
+fs.rmSync(path.join(repo, 'out/renderer'), { recursive: true, force: true })
+fs.cpSync(path.join(stage, 'renderer'), path.join(repo, 'out/renderer'), { recursive: true })
+await run(['config/scripts/project-renderer-web-client.mjs'])
+await run(['config/scripts/build-mobile-web-app-bundle.mjs'])
 await run(['node_modules/electron-builder/cli.js', '--config', path.join(recipe, 'electron-builder.cjs'), '--mac', '--arm64', '--dir', '--publish', 'never'])
 info.completedAt = new Date().toISOString()
 fs.writeFileSync(path.join(output, 'BUILD-INFO.json'), JSON.stringify(info, null, 2))
