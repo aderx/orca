@@ -58,9 +58,8 @@ module.exports = { ...base,
   electronDist: path.join(repo, 'node_modules/electron/dist'),
   extraMetadata: { name: 'orca-zstack', productName: 'Orca ZStack', main: 'fork-bootstrap.cjs', version, buildVersion },
   directories: { ...base.directories, output: path.resolve(__dirname, '../production') },
-  files: ['out/**/*', 'resources/**/*', 'package.json', ...base.files, '!out/zstack-dev-bootstrap.cjs', '!out/renderer/**/*',
-    { from: path.join(__dirname, 'stage'), to: '.', filter: ['fork-bootstrap.cjs'] },
-    { from: path.join(__dirname, 'stage/renderer'), to: 'out/renderer', filter: ['**/*'] }],
+  files: ['out/**/*', 'resources/**/*', 'package.json', ...base.files, '!out/zstack-dev-bootstrap.cjs',
+    { from: path.join(__dirname, 'stage'), to: '.', filter: ['fork-bootstrap.cjs'] }],
   mac: { ...base.mac, identity: '-', executableName: 'Orca', target: [{ target: 'dir', arch: ['arm64'] }], fileAssociations: [],
     extraResources: [...base.mac.extraResources, { from: path.join(repo, 'plugins/zstack-launcher'), to: 'plugins/zstack-launcher', filter: ['**/*', '!*.test.mjs', '!test.mjs'] }] }
 }
@@ -90,4 +89,4 @@ await run(['config/scripts/build-mobile-web-app-bundle.mjs'])
 await run(['node_modules/electron-builder/cli.js', '--config', path.join(recipe, 'electron-builder.cjs'), '--mac', '--arm64', '--dir', '--publish', 'never'])
 info.completedAt = new Date().toISOString()
 fs.writeFileSync(path.join(output, 'BUILD-INFO.json'), JSON.stringify(info, null, 2))
-console.log(`Packaged: ${path.join(output, 'production/mac-arm64/Orca ZStack.app')}`)
+console.log(`Packaged: ${path.join(output, 'production/mac-arm64/Orca.app')}`)
